@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use futures::stream::StreamExt;
 use log::info;
+use rmk_fs::RmkFs;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use tokio::sync::Mutex;
@@ -38,6 +39,9 @@ async fn main() -> Result<()> {
     let handle = signals.handle();
 
     let signals_task = tokio::spawn(handle_signals(signals, exit_flag.clone()));
+
+    let fs = RmkFs::new(&PathBuf::from("../dump/xochitl"));
+    let fs_task = fs.mount("../mnt");
 
     loop {
         if *exit_flag.lock().await {

@@ -1320,6 +1320,7 @@ dependencies = [
  "futures",
  "log",
  "pretty_env_logger",
+ "rmk-fs",
  "signal-hook",
  "signal-hook-tokio",
  "tokio",
@@ -1331,6 +1332,7 @@ version = "0.1.0"
 dependencies = [
  "datafusion",
  "fuser",
+ "thiserror",
  "tokio",
 ]
 

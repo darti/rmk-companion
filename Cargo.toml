@@ -1,2 +1,6 @@
 [workspace]
 members = ["rmk-fs", "rmk-daemon", "rmk-notebook"]
+
+# [profile.release]
+# lto = true
+# codegen-units = 1
