@@ -1,0 +1,2 @@
+[workspace]
+members = ["rmk-fs", "rmk-daemon", "rmk-notebook"]
