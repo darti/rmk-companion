@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use fuser::{Filesystem, MountOption};
+use glob::glob;
 
 use crate::errors::{RmkFsError, RmkFsResult};
 
@@ -20,6 +21,18 @@ impl RmkFs {
                 source,
             },
         )
+    }
+
+    pub fn scan(&self) -> RmkFsResult<()> {
+        let pattern = self.root.join("*.metadata");
+
+        let pattern = pattern.to_str().ok_or_else(|| RmkFsError::ScanError {
+            root: self.root.clone(),
+        })?;
+
+        for f in glob(pattern) {}
+
+        Ok(())
     }
 }
 

@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 datafusion = "7"
 fuser = "0.11"
+glob = "0.3"
 thiserror = "1"
 # https://arrow.apache.org/datafusion/user-guide/library.html
 # snmalloc-rs = "0.2"
