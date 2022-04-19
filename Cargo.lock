@@ -1336,9 +1336,12 @@ dependencies = [
 name = "rmk-fs"
 version = "0.1.0"
 dependencies = [
+ "arrow",
+ "async-trait",
  "datafusion",
  "fuser",
  "glob",
+ "log",
  "thiserror",
  "tokio",
 ]
