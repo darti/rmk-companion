@@ -46,19 +46,33 @@ pub struct Metadata {
     pub visible_name: String,
 }
 
-pub fn read_metadata(root: &PathBuf, id: &str) -> Result<Metadata> {
+pub fn read_metadata(path: &PathBuf) -> Result<(&str, Metadata)> {
+    let file = std::fs::read_to_string(path)?;
+    let metadata = serde_json::from_str(&file)?;
+
+    let id = path.file_stem().and_then(|f| f.to_str()).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Could not get file stem from path",
+        )
+    })?;
+
+    Ok((id, metadata))
+}
+
+pub fn read_metadata_with_id(root: &PathBuf, id: &str) -> Result<Metadata> {
     let file = std::fs::read_to_string(root.join(format!("{}.metadata", id)))?;
     let metadata = serde_json::from_str(&file)?;
     Ok(metadata)
 }
 
-pub fn read_content(root: &PathBuf, id: &str) -> Result<Content> {
+pub fn read_content_with_id(root: &PathBuf, id: &str) -> Result<Content> {
     let file = std::fs::read_to_string(root.join(format!("{}.content", id)))?;
     let content = serde_json::from_str(&file)?;
     Ok(content)
 }
 
-pub fn read_pagedata(root: &PathBuf, id: &str) -> Result<Vec<String>> {
+pub fn read_pagedata_with_id(root: &PathBuf, id: &str) -> Result<Vec<String>> {
     let file = File::open(root.join(format!("{}.pagedata", id)))?;
     let pagedata = BufReader::new(file)
         .lines()
@@ -95,7 +109,7 @@ mod tests {
         let root = PathBuf::from("samples");
         let id = "0d9af7de-39f8-4251-8500-330eec0d00f0";
 
-        let _metadata = super::read_metadata(&root, id)?;
+        let _metadata = super::read_metadata_with_id(&root, id)?;
 
         Ok(())
     }

@@ -15,3 +15,5 @@ thiserror = "1"
 # https://arrow.apache.org/datafusion/user-guide/library.html
 # snmalloc-rs = "0.2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
+
+rmk-notebook = { path = "../rmk-notebook" }
