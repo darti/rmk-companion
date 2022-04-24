@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
 
     let signals_task = tokio::spawn(handle_signals(signals, exit_flag.clone()));
 
-    let fs = RmkFs::new(&PathBuf::from("../dump/xochitl"));
+    let fs = RmkFs::try_new(&PathBuf::from("../dump/xochitl"))?;
     let fs_task = fs.mount("../mnt");
 
     loop {
