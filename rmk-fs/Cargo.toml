@@ -5,6 +5,7 @@ edition = "2021"
 
 
 [dependencies]
+libc = "0.2"
 arrow = "9"
 async-trait = "0.1"
 datafusion = "7"

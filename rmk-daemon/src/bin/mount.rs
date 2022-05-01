@@ -41,7 +41,9 @@ async fn main() -> Result<()> {
     let signals_task = tokio::spawn(handle_signals(signals, exit_flag.clone()));
 
     let fs = RmkFs::try_new(&PathBuf::from("../dump/xochitl"))?;
-    let fs_task = fs.mount("../mnt");
+    fs.scan()?;
+
+    let fs_task = fs.mount("../mnt")?;
 
     loop {
         if *exit_flag.lock().await {
@@ -50,6 +52,9 @@ async fn main() -> Result<()> {
     }
 
     info!("Shutting down rmk-daemon");
+
+    fs_task.join();
+    info!("FS umounted");
 
     handle.close();
     signals_task.await?;

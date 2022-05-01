@@ -1,5 +1,5 @@
 [workspace]
-members = ["rmk-fs", "rmk-daemon", "rmk-notebook"]
+members = ["rmk-fs", "rmk-daemon", "rmk-notebook", "rmk-app/src-tauri"]
 
 # [profile.release]
 # lto = true
