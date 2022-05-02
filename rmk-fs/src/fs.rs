@@ -38,6 +38,8 @@ impl RmkFs {
     }
 
     pub fn mount(self, mountpoint: &str) -> RmkFsResult<fuser::BackgroundSession> {
+        self.scan()?;
+
         let options = &[
             MountOption::AutoUnmount,
             MountOption::AllowOther,

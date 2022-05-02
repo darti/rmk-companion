@@ -10,6 +10,22 @@
     "beforeBuildCommand": "pnpm build"
   },
   "tauri": {
+    "cli": {
+      "description": "",
+      "longDescription": "",
+      "beforeHelp": "",
+      "afterHelp": "",
+      "args": [
+        {
+          "name": "root",
+          "short": "r"
+        },
+        {
+          "name": "mount",
+          "short": "m"
+        }
+      ]
+    },
     "systemTray": {
       "iconPath": "icons/icon.png"
     },
