@@ -15,11 +15,21 @@ rust-version = "1.57"
 tauri-build = { version = "1.0.0-rc.6", features = [] }
 
 [dependencies]
+futures = "0.3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.0.0-rc.7", features = ["api-all", "system-tray"] }
 log = "0.4"
 pretty_env_logger = "0.4"
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "sync",
+    "tracing",
+] }
 
 [features]
 # by default Tauri runs in production mode
