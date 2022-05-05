@@ -3,12 +3,10 @@
     windows_subsystem = "windows"
 )]
 
-mod mount;
-mod shutdown;
-
 use std::path::PathBuf;
 
 use log::{debug, info};
+use rmk_app::shutdown;
 use rmk_fs::RmkFs;
 use tauri::api::cli::get_matches;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
@@ -36,12 +34,12 @@ fn build_ui(shutdown_send: mpsc::UnboundedSender<()>) -> Result<App> {
             },
             _ => {}
         })
-        // .setup(|app| {
-        //     let matches =
-        //         get_matches(app.config().tauri.cli.as_ref().unwrap(), app.package_info())?;
-        //     debug!("{:?}", matches);
-        //     Ok(())
-        // })
+        .setup(|app| {
+            let matches =
+                get_matches(app.config().tauri.cli.as_ref().unwrap(), app.package_info())?;
+            debug!("{:?}", matches);
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .context("error while running tauri application")
 }
@@ -70,7 +68,11 @@ async fn main() -> Result<()> {
         };
     };
 
-    tokio::spawn(shutdown::shutdown_manager(shutdown_recv, app.handle()));
+    let app_handle = app.handle();
+
+    let shd = tokio::spawn(shutdown::shutdown_manager(shutdown_recv, move || {
+        app_handle.exit(0)
+    }));
 
     let fs = RmkFs::try_new(&PathBuf::from(root)).unwrap();
 

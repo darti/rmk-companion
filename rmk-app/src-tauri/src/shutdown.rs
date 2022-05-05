@@ -2,10 +2,13 @@ use futures::stream::StreamExt;
 use log::info;
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
-use tauri::AppHandle;
+
 use tokio::sync::mpsc;
 
-pub async fn shutdown_manager(mut recv: mpsc::UnboundedReceiver<()>, app: AppHandle) {
+pub async fn shutdown_manager<R, F>(mut recv: mpsc::UnboundedReceiver<()>, on_terminate: F) -> R
+where
+    F: FnOnce() -> R,
+{
     let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).unwrap();
     let handle = signals.handle();
     let mut signals = signals.fuse();
@@ -21,5 +24,5 @@ pub async fn shutdown_manager(mut recv: mpsc::UnboundedReceiver<()>, app: AppHan
 
     handle.close();
 
-    app.exit(0);
+    on_terminate()
 }

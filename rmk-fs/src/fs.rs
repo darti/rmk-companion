@@ -46,9 +46,9 @@ impl RmkFs {
             MountOption::FSName("remarkable".to_string()),
             MountOption::RO,
             MountOption::CUSTOM("volname=Remarkable".to_string()),
-            // MountOption::CUSTOM(
-            //     "modules=volicon,iconpath=../resources/remarkable.icns".to_string(),
-            // ),
+            MountOption::CUSTOM(
+                "modules=volicon,iconpath=../resources/remarkable.icns".to_string(),
+            ),
         ];
 
         fuser::spawn_mount2(self, mountpoint.clone(), options).map_err(|source| {
