@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let mut root = "../../../dump/xochitl".to_string();
-    let mut mount_point = "../../../mnt".to_string();
+    let mut mount_point = "../mnt".to_string();
 
     let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
 
@@ -20,11 +20,12 @@ async fn main() -> Result<()> {
     let mnt_guard = fs.mount(&mount_point)?;
 
     let shd = tokio::spawn(shutdown::shutdown_manager(shutdown_recv, move || {
+        info!("Unmounting...");
+        mnt_guard.join();
         info!("Shutdown");
     }));
 
     tokio::try_join!(shd)?;
-    mnt_guard.join();
 
     Ok(())
 }

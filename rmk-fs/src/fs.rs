@@ -1,20 +1,21 @@
 use std::{
+    ffi::OsStr,
     fmt::Debug,
     path::PathBuf,
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
 };
 
-use datafusion::{error::DataFusionError, prelude::ExecutionContext};
-use fuser::{FileAttr, FileType, Filesystem, MountOption};
+use datafusion::{error::DataFusionError, parquet::data_type::AsBytes, prelude::ExecutionContext};
+use fuser::{FileAttr, FileType, Filesystem, MountOption, ReplyData, Request};
 use libc::ENOENT;
+use log::info;
 
 use crate::{
+    attr::{volume_icon_attr, HELLO_DIR_ATTR, HELLO_TXT_ATTR, HELLO_TXT_CONTENT, ICON_BYTES, TTL},
     errors::{RmkFsError, RmkFsResult},
     table::RmkTable,
 };
-
-const TTL: Duration = Duration::from_secs(1); // 1 second
 
 #[derive(Clone)]
 pub struct RmkFs {
@@ -40,15 +41,19 @@ impl RmkFs {
     pub fn mount(self, mountpoint: &str) -> RmkFsResult<fuser::BackgroundSession> {
         self.scan()?;
 
+        info!(
+            "Mount point: {:?}",
+            PathBuf::from(mountpoint).canonicalize().unwrap()
+        );
+
         let options = &[
             MountOption::AutoUnmount,
             MountOption::AllowOther,
             MountOption::FSName("remarkable".to_string()),
             MountOption::RO,
+            MountOption::CUSTOM("modules=volname:volicon".to_string()),
             MountOption::CUSTOM("volname=Remarkable".to_string()),
-            MountOption::CUSTOM(
-                "modules=volicon,iconpath=../resources/remarkable.icns".to_string(),
-            ),
+            MountOption::CUSTOM("iconpath=.VolumeIcon.icns".to_string()),
         ];
 
         fuser::spawn_mount2(self, mountpoint.clone(), options).map_err(|source| {
@@ -71,29 +76,53 @@ impl Debug for RmkFs {
 }
 
 impl Filesystem for RmkFs {
+    fn lookup(
+        &mut self,
+        _req: &fuser::Request<'_>,
+        parent: u64,
+        name: &std::ffi::OsStr,
+        reply: fuser::ReplyEntry,
+    ) {
+        if parent == 1 && name.to_str() == Some("hello.txt") {
+            reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
+        } else if parent == 1 && name.to_str() == Some(".VolumeIcon.icns") {
+            reply.entry(&TTL, &volume_icon_attr(), 0);
+        } else {
+            reply.error(ENOENT);
+        }
+    }
+
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
         match ino {
-            1 => reply.attr(
-                &TTL,
-                &FileAttr {
-                    ino: 1,
-                    size: 0,
-                    blocks: 0,
-                    atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                    mtime: UNIX_EPOCH,
-                    ctime: UNIX_EPOCH,
-                    crtime: UNIX_EPOCH,
-                    kind: FileType::Directory,
-                    perm: 0o755,
-                    nlink: 2,
-                    uid: 501,
-                    gid: 20,
-                    rdev: 0,
-                    flags: 0,
-                    blksize: 512,
-                },
-            ),
+            1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
+            2 => reply.attr(&TTL, &HELLO_TXT_ATTR),
+            3 => reply.attr(&TTL, &volume_icon_attr()),
             _ => reply.error(ENOENT),
+        }
+    }
+
+    fn read(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock: Option<u64>,
+        reply: ReplyData,
+    ) {
+        let from = offset as usize;
+        let to = from + size as usize;
+
+        if ino == 2 {
+            reply.data(&HELLO_TXT_CONTENT.as_bytes()[from..to]);
+        } else if ino == 3 {
+            let from = offset as usize;
+            let to = from + size as usize;
+            reply.data(&ICON_BYTES[from..to])
+        } else {
+            reply.error(ENOENT);
         }
     }
 
@@ -114,6 +143,7 @@ impl Filesystem for RmkFs {
             (1, FileType::Directory, "."),
             (1, FileType::Directory, ".."),
             (2, FileType::RegularFile, "hello.txt"),
+            (3, FileType::RegularFile, ".VolumeIcon.icns"),
         ];
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
@@ -123,15 +153,5 @@ impl Filesystem for RmkFs {
             }
         }
         reply.ok();
-    }
-
-    fn lookup(
-        &mut self,
-        _req: &fuser::Request<'_>,
-        parent: u64,
-        name: &std::ffi::OsStr,
-        reply: fuser::ReplyEntry,
-    ) {
-        reply.error(ENOENT);
     }
 }

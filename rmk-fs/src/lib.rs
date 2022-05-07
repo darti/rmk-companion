@@ -1,3 +1,4 @@
+mod attr;
 mod datasource;
 mod fs;
 mod table;
