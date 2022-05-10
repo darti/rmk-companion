@@ -15,7 +15,7 @@ use glob::glob;
 use std::{
     any::Any,
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -73,6 +73,12 @@ impl Debug for RmkTableInner {
 pub struct RmkTable {
     schema: SchemaRef,
     inner: Arc<RwLock<RmkTableInner>>,
+}
+
+impl Display for RmkTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.inner.read().unwrap())
+    }
 }
 
 impl RmkTable {

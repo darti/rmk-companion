@@ -17,6 +17,9 @@ pub enum RmkFsError {
     NotebookError(#[from] rmk_notebook::Error),
     #[error(transparent)]
     DataFusionError(#[from] datafusion::error::DataFusionError),
+
+    #[error("fuser error")]
+    FuserError,
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;

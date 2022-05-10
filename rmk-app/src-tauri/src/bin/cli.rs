@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let mut root = "../../../dump/xochitl".to_string();
+    let mut root = "../dump/xochitl".to_string();
     let mut mount_point = "../mnt".to_string();
 
     let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
