@@ -195,7 +195,12 @@ impl ExecutionPlan for FsExecPlan {
             id_array.append_value(&id)?;
             type_array.append_value(&metadata.typ)?;
             name_array.append_value(&metadata.visible_name)?;
-            parent_array.append_value(&metadata.parent)?;
+
+            if let Some(parent) = metadata.parent {
+                parent_array.append_value(&parent)?;
+            } else {
+                parent_array.append_null()?;
+            }
         }
 
         Ok(Box::pin(MemoryStream::try_new(

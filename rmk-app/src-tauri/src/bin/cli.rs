@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use actix::prelude::*;
 use anyhow::Result;
-use log::info;
+
 use rmk_fs::{Query, RmkFsActor, Scan};
 
 #[actix_rt::main]
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
 
     fs_watcher.send(Scan).await??;
     let df = fs_watcher
-        .send(Query::new("select * from metadata"))
+        .send(Query::new("select * from metadata where parent is null"))
         .await??;
 
     df.show().await?;

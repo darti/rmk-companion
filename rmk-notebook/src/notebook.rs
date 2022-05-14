@@ -37,7 +37,8 @@ pub struct Metadata {
     pub _metadatamodified: bool,
     pub _modified: bool,
 
-    pub parent: String,
+    #[serde_as(as = "serde_with::NoneAsEmptyString")]
+    pub parent: Option<String>,
     pub _pinned: bool,
     pub _synced: bool,
     #[serde(rename = "type")]

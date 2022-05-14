@@ -8,7 +8,6 @@ use datafusion::error::DataFusionError;
 use datafusion::prelude::ExecutionContext;
 use log::info;
 
-use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
 use crate::RmkTable;
 
@@ -64,7 +63,7 @@ impl Query {
 impl Handler<Query> for RmkFsActor {
     type Result = AtomicResponse<Self, Result<Arc<(dyn DataFrame + 'static)>, DataFusionError>>;
 
-    fn handle(&mut self, msg: Query, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Query, _ctx: &mut Self::Context) -> Self::Result {
         let mut context = self.context.clone();
 
         let query = msg.0.clone();
@@ -72,7 +71,7 @@ impl Handler<Query> for RmkFsActor {
         AtomicResponse::new(Box::pin(
             async move { context.sql(&query).await }
                 .into_actor(self)
-                .map(|out, this, _| out),
+                .map(|out, _this, _| out),
         ))
     }
 }
