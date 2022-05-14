@@ -1,31 +1,24 @@
 use std::path::PathBuf;
 
+use actix::prelude::*;
 use anyhow::Result;
-
 use log::info;
-use rmk_app::shutdown;
-use rmk_fs::RmkFs;
-use tokio::sync::mpsc;
+use rmk_fs::{Query, RmkFsActor, Scan};
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let mut root = "../dump/xochitl".to_string();
-    let mut mount_point = "../mnt".to_string();
+    let root = "../dump/xochitl".to_string();
 
-    let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
+    let fs_watcher = RmkFsActor::try_new(&PathBuf::from(root))?.start();
 
-    let fs = RmkFs::try_new(&PathBuf::from(root))?;
-    let mnt_guard = fs.mount(&mount_point)?;
+    fs_watcher.send(Scan).await??;
+    let df = fs_watcher
+        .send(Query::new("select * from metadata"))
+        .await??;
 
-    let shd = tokio::spawn(shutdown::shutdown_manager(shutdown_recv, move || {
-        info!("Unmounting...");
-        mnt_guard.join();
-        info!("Shutdown");
-    }));
-
-    tokio::try_join!(shd)?;
+    df.show().await?;
 
     Ok(())
 }

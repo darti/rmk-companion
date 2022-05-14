@@ -1,6 +1,5 @@
 use std::{fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
 use datafusion::{error::DataFusionError, prelude::ExecutionContext};
 use fuser::{FileAttr, Filesystem, MountOption};
 use libc::ENOENT;
@@ -84,14 +83,14 @@ impl Filesystem for RmkFs {
         let name = name.to_str().unwrap().to_owned();
 
         // let fut =
-        let task = self.runtime.spawn(self.lookup_async(parent, name));
+        // let task = self.runtime.spawn(self.lookup_async(parent, name));
 
-        match self.runtime.block_on(task) {
-            Ok(Ok((ttl, attr, genetation))) => {
-                reply.entry(&ttl, &attr, genetation);
-            }
-            Err(_) => reply.error(ENOENT),
-        }
+        // match self.runtime.block_on(task) {
+        //     Ok(Ok((ttl, attr, genetation))) => {
+        //         reply.entry(&ttl, &attr, genetation);
+        //     }
+        //     Err(_) => reply.error(ENOENT),
+        // }
     }
 }
 
