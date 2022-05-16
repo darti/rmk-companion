@@ -1,13 +1,15 @@
+use actix::prelude::*;
+use actix::{Actor, Context, Handler};
 use futures::stream::StreamExt;
+use futures::Future;
 use log::info;
+use rmk_fs::errors::RmkFsResult;
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 
-use tokio::sync::mpsc;
-
-pub async fn shutdown_manager<R, F>(mut recv: mpsc::UnboundedReceiver<()>, on_terminate: F) -> R
+pub async fn shutdown_manager<R, F>(on_terminate: F) -> R
 where
-    F: FnOnce() -> R,
+    F: Future<Output = R>,
 {
     let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT]).unwrap();
     let handle = signals.handle();
@@ -16,13 +18,14 @@ where
     info!("Shutdown hook started");
 
     tokio::select! {
-        _ = recv.recv() => info!("Received shutdown signal"),
         _ = signals.next() => info!("Received signal"),
     };
 
     info!("Signal: Shutting down...");
 
+    let r = on_terminate.await;
+
     handle.close();
 
-    on_terminate()
+    r
 }

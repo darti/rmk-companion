@@ -19,3 +19,4 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 
 rmk-notebook = { path = "../rmk-notebook" }
 actix = "0.13"
+uuid = { version = "1", features = ["v4", "serde"] }

@@ -1,5 +1,5 @@
 use arrow::{
-    array::StringBuilder,
+    array::{StringBuilder, UInt64Builder},
     datatypes::{DataType, Field, Schema, SchemaRef},
     record_batch::RecordBatch,
 };
@@ -14,7 +14,7 @@ use datafusion::{
 use glob::glob;
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
     fmt::{Debug, Display},
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -22,6 +22,7 @@ use std::{
 
 use log::{debug, info};
 use rmk_notebook::{read_metadata, Metadata};
+use std::hash::{Hash, Hasher};
 
 use crate::errors::{RmkFsError, RmkFsResult};
 
@@ -89,6 +90,7 @@ impl RmkTable {
                 Field::new("type", DataType::Utf8, false),
                 Field::new("name", DataType::Utf8, false),
                 Field::new("parent", DataType::Utf8, true),
+                Field::new("ino", DataType::UInt64, false),
             ])),
             inner: Arc::new(RwLock::new(RmkTableInner::new(root.clone()))),
         }
@@ -190,6 +192,7 @@ impl ExecutionPlan for FsExecPlan {
         let mut type_array = StringBuilder::new(nodes.len());
         let mut name_array = StringBuilder::new(nodes.len());
         let mut parent_array = StringBuilder::new(nodes.len());
+        let mut ino_array = UInt64Builder::new(nodes.len());
 
         for (id, metadata) in nodes {
             id_array.append_value(&id)?;
@@ -201,6 +204,11 @@ impl ExecutionPlan for FsExecPlan {
             } else {
                 parent_array.append_null()?;
             }
+
+            let mut s = DefaultHasher::new();
+            id.hash(&mut s);
+
+            ino_array.append_value(s.finish())?;
         }
 
         Ok(Box::pin(MemoryStream::try_new(
@@ -211,6 +219,7 @@ impl ExecutionPlan for FsExecPlan {
                     Arc::new(type_array.finish()),
                     Arc::new(name_array.finish()),
                     Arc::new(parent_array.finish()),
+                    Arc::new(ino_array.finish()),
                 ],
             )?],
             self.schema(),

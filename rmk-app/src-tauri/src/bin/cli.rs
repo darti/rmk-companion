@@ -3,22 +3,29 @@ use std::path::PathBuf;
 use actix::prelude::*;
 use anyhow::Result;
 
-use rmk_fs::{Query, RmkFsActor, Scan};
+use log::info;
+use rmk_app::shutdown::shutdown_manager;
+use rmk_fs::{FsActor, Mount, Scan, TableActor, Umount};
 
-#[actix_rt::main]
+#[actix::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let root = "../dump/xochitl".to_string();
+    let root = PathBuf::from("../dump/xochitl");
+    let mountpoint = PathBuf::from("../mnt");
 
-    let fs_watcher = RmkFsActor::try_new(&PathBuf::from(root))?.start();
+    let file_watcher = TableActor::try_new(&root)?.start();
+    file_watcher.send(Scan).await??;
 
-    fs_watcher.send(Scan).await??;
-    let df = fs_watcher
-        .send(Query::new("select * from metadata where parent is null"))
-        .await??;
+    let fs_mounter = FsActor::new(&mountpoint).start();
+    fs_mounter.send(Mount).await??;
 
-    df.show().await?;
+    shutdown_manager(async {
+        fs_mounter.send(Umount).await;
+    })
+    .await;
+
+    info!("Exiting...");
 
     Ok(())
 }

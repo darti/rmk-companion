@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 
 use datafusion::{error::DataFusionError, prelude::ExecutionContext};
 use fuser::{FileAttr, Filesystem, MountOption};
-use libc::ENOENT;
+
 use log::info;
 use tokio::runtime::Handle;
 

@@ -1,77 +1,88 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use actix::prelude::*;
 use actix::Actor;
-use datafusion::dataframe::DataFrame;
-use datafusion::error::DataFusionError;
-use datafusion::prelude::ExecutionContext;
+use fuser::BackgroundSession;
+use fuser::Filesystem;
+use fuser::MountOption;
 use log::info;
+use tokio::fs::File;
 
+use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
-use crate::RmkTable;
 
-pub struct RmkFsActor {
-    table: Arc<RmkTable>,
-    context: ExecutionContext,
+pub struct FsActor {
+    mountpoint: PathBuf,
+    session: Option<BackgroundSession>,
 }
 
-impl RmkFsActor {
-    pub fn try_new(root: &PathBuf) -> Result<Self, DataFusionError> {
-        let context = ExecutionContext::new();
-        let table = Arc::new(RmkTable::new(root));
-
-        let mut fs = Self {
-            table: table.clone(),
-            context,
-        };
-
-        fs.context.register_table("metadata", table)?;
-
-        Ok(fs)
+impl FsActor {
+    pub fn new(mountpoint: &PathBuf) -> Self {
+        Self {
+            mountpoint: mountpoint.clone(),
+            session: None,
+        }
     }
 }
 
-impl Actor for RmkFsActor {
+impl Actor for FsActor {
     type Context = Context<Self>;
 }
 
 #[derive(Message)]
 #[rtype(result = "RmkFsResult<()>")]
-pub struct Scan;
+pub struct Mount;
 
-impl Handler<Scan> for RmkFsActor {
+impl Handler<Mount> for FsActor {
     type Result = RmkFsResult<()>;
 
-    fn handle(&mut self, _msg: Scan, _ctx: &mut Self::Context) -> Self::Result {
-        info!("Scanning filesystem...");
+    fn handle(&mut self, msg: Mount, _ctx: &mut Self::Context) -> Self::Result {
+        println!("Mounting filesystem...");
 
-        self.table.scan()
+        let options = &[
+            MountOption::AutoUnmount,
+            MountOption::AllowOther,
+            MountOption::FSName("remarkable".to_string()),
+            MountOption::RO,
+            MountOption::CUSTOM("modules=volname:volicon".to_string()),
+            MountOption::CUSTOM("volname=Remarkable".to_string()),
+            MountOption::CUSTOM("iconpath=.VolumeIcon.icns".to_string()),
+        ];
+
+        let fs = Fs {};
+
+        self.session = Some(
+            fuser::spawn_mount2(fs, self.mountpoint.clone(), options).map_err(|source| {
+                RmkFsError::MountError {
+                    mountpoint: self.mountpoint.clone().to_string_lossy().to_string(),
+                    source,
+                }
+            })?,
+        );
+
+        Ok(())
     }
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<Arc<(dyn DataFrame + 'static)>, DataFusionError>")]
-pub struct Query(String);
+#[rtype(result = "RmkFsResult<()>")]
+pub struct Umount;
 
-impl Query {
-    pub fn new(query: &str) -> Self {
-        Self(query.to_string())
+impl Handler<Umount> for FsActor {
+    type Result = RmkFsResult<()>;
+
+    fn handle(&mut self, _msg: Umount, _ctx: &mut Self::Context) -> Self::Result {
+        info!("Unmounting filesystem...");
+
+        let session = self.session.take();
+        if let Some(session) = session {
+            session.join();
+        }
+
+        Ok(())
     }
 }
 
-impl Handler<Query> for RmkFsActor {
-    type Result = AtomicResponse<Self, Result<Arc<(dyn DataFrame + 'static)>, DataFusionError>>;
+struct Fs {}
 
-    fn handle(&mut self, msg: Query, _ctx: &mut Self::Context) -> Self::Result {
-        let mut context = self.context.clone();
-
-        let query = msg.0.clone();
-
-        AtomicResponse::new(Box::pin(
-            async move { context.sql(&query).await }
-                .into_actor(self)
-                .map(|out, _this, _| out),
-        ))
-    }
-}
+impl Filesystem for Fs {}
