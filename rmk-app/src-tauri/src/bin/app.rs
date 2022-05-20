@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use log::{debug, info};
-use rmk_app::shutdown;
+
 use rmk_fs::RmkFs;
 use tauri::api::cli::get_matches;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
@@ -70,9 +70,9 @@ async fn main() -> Result<()> {
 
     let app_handle = app.handle();
 
-    let shd = tokio::spawn(shutdown::shutdown_manager(shutdown_recv, move || {
-        app_handle.exit(0)
-    }));
+    // let shd = tokio::spawn(shutdown::shutdown_manager(shutdown_recv, move || {
+    //     app_handle.exit(0)
+    // }));
 
     let fs = RmkFs::try_new(&PathBuf::from(root)).unwrap();
 

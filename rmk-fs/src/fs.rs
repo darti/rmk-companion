@@ -1,6 +1,7 @@
+use datafusion::prelude::*;
 use std::{fmt::Debug, path::PathBuf, sync::Arc, time::Duration};
 
-use datafusion::{error::DataFusionError, prelude::ExecutionContext};
+use datafusion::error::DataFusionError;
 use fuser::{FileAttr, Filesystem, MountOption};
 
 use log::info;
@@ -15,13 +16,13 @@ use crate::{
 #[derive(Clone)]
 pub struct RmkFs {
     table: Arc<RmkTable>,
-    context: ExecutionContext,
+    context: SessionContext,
     runtime: Handle,
 }
 
 impl RmkFs {
     pub fn try_new(root: &PathBuf) -> Result<Self, DataFusionError> {
-        let context = ExecutionContext::new();
+        let context = SessionContext::new();
         let table = Arc::new(RmkTable::new(root));
 
         let mut fs = RmkFs {
@@ -82,31 +83,13 @@ impl Filesystem for RmkFs {
     ) {
         let name = name.to_str().unwrap().to_owned();
 
-        // let fut =
-        // let task = self.runtime.spawn(self.lookup_async(parent, name));
-
-        // match self.runtime.block_on(task) {
-        //     Ok(Ok((ttl, attr, genetation))) => {
-        //         reply.entry(&ttl, &attr, genetation);
-        //     }
-        //     Err(_) => reply.error(ENOENT),
+        // if parent == 1 && name == "hello.txt" {
+        //     Ok((TTL, HELLO_TXT_ATTR, 0))
+        // } else if parent == 1 && name == ".VolumeIcon.icns" {
+        //     Ok((TTL, volume_icon_attr(), 0))
+        // } else {
+        //     Err(RmkFsError::FuserError)
         // }
-    }
-}
-
-impl RmkFs {
-    async fn lookup_async(
-        &self,
-        parent: u64,
-        name: String,
-    ) -> RmkFsResult<(Duration, FileAttr, u64)> {
-        if parent == 1 && name == "hello.txt" {
-            Ok((TTL, HELLO_TXT_ATTR, 0))
-        } else if parent == 1 && name == ".VolumeIcon.icns" {
-            Ok((TTL, volume_icon_attr(), 0))
-        } else {
-            Err(RmkFsError::FuserError)
-        }
     }
 
     // fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {

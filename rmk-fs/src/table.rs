@@ -7,6 +7,8 @@ use async_trait::async_trait;
 use datafusion::{
     datasource::TableProvider,
     error::DataFusionError,
+    execution::context::TaskContext,
+    logical_expr::TableType,
     physical_plan::{
         memory::MemoryStream, project_schema, ExecutionPlan, SendableRecordBatchStream,
     },
@@ -103,6 +105,10 @@ impl RmkTable {
 
 #[async_trait]
 impl TableProvider for RmkTable {
+    fn table_type(&self) -> TableType {
+        TableType::Base
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -172,16 +178,16 @@ impl ExecutionPlan for FsExecPlan {
     }
 
     fn with_new_children(
-        &self,
-        _children: Vec<Arc<dyn ExecutionPlan>>,
-    ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
-        todo!()
+        self: Arc<Self>,
+        children: Vec<Arc<dyn ExecutionPlan>>,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        todo!("FsExecPlan::with_new_children")
     }
 
-    async fn execute(
+    fn execute(
         &self,
         _partition: usize,
-        _runtime: Arc<datafusion::execution::runtime_env::RuntimeEnv>,
+        _context: Arc<TaskContext>,
     ) -> Result<SendableRecordBatchStream, DataFusionError> {
         let nodes = {
             let table = self.table.inner.read().unwrap();

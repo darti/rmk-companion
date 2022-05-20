@@ -5,7 +5,8 @@ use actix::prelude::*;
 use actix::Actor;
 use datafusion::dataframe::DataFrame;
 use datafusion::error::DataFusionError;
-use datafusion::prelude::ExecutionContext;
+use datafusion::prelude::SessionContext;
+use log::debug;
 use log::info;
 
 use crate::errors::RmkFsResult;
@@ -13,12 +14,12 @@ use crate::RmkTable;
 
 pub struct TableActor {
     table: Arc<RmkTable>,
-    context: ExecutionContext,
+    context: SessionContext,
 }
 
 impl TableActor {
     pub fn try_new(root: &PathBuf) -> Result<Self, DataFusionError> {
-        let context = ExecutionContext::new();
+        let context = SessionContext::new();
         let table = Arc::new(RmkTable::new(root));
 
         let mut fs = Self {
@@ -51,7 +52,7 @@ impl Handler<Scan> for TableActor {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<Arc<(dyn DataFrame + 'static)>, DataFusionError>")]
+#[rtype(result = "Result<Arc<DataFrame>, DataFusionError>")]
 pub struct Query(String);
 
 impl Query {
@@ -61,12 +62,14 @@ impl Query {
 }
 
 impl Handler<Query> for TableActor {
-    type Result = AtomicResponse<Self, Result<Arc<(dyn DataFrame + 'static)>, DataFusionError>>;
+    type Result = AtomicResponse<Self, Result<Arc<DataFrame>, DataFusionError>>;
 
     fn handle(&mut self, msg: Query, _ctx: &mut Self::Context) -> Self::Result {
         let mut context = self.context.clone();
 
         let query = msg.0.clone();
+
+        debug!("Executing query: {}", query);
 
         AtomicResponse::new(Box::pin(
             async move { context.sql(&query).await }

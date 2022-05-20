@@ -1,9 +1,6 @@
-use actix::prelude::*;
-use actix::{Actor, Context, Handler};
 use futures::stream::StreamExt;
 use futures::Future;
 use log::info;
-use rmk_fs::errors::RmkFsResult;
 use signal_hook::consts::*;
 use signal_hook_tokio::Signals;
 
