@@ -179,7 +179,7 @@ impl ExecutionPlan for FsExecPlan {
 
     fn with_new_children(
         self: Arc<Self>,
-        children: Vec<Arc<dyn ExecutionPlan>>,
+        _children: Vec<Arc<dyn ExecutionPlan>>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         todo!("FsExecPlan::with_new_children")
     }

@@ -2,17 +2,19 @@ use std::path::PathBuf;
 
 use actix::prelude::*;
 use actix::Actor;
+use arrow::array::StringArray;
+use arrow::array::UInt64Array;
 use fuser::BackgroundSession;
+use fuser::FileType;
 use fuser::Filesystem;
 use fuser::MountOption;
 use log::info;
-use tokio::runtime::Runtime;
 
 use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
 use crate::Query;
 use crate::TableActor;
-
+use itertools::izip;
 pub struct FsActor {
     mountpoint: PathBuf,
     session: Option<BackgroundSession>,
@@ -40,7 +42,7 @@ pub struct Mount;
 impl Handler<Mount> for FsActor {
     type Result = RmkFsResult<()>;
 
-    fn handle(&mut self, msg: Mount, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Mount, ctx: &mut Self::Context) -> Self::Result {
         println!("Mounting filesystem...");
 
         let options = &[
@@ -54,7 +56,7 @@ impl Handler<Mount> for FsActor {
         ];
 
         let fs = Fs {
-            table: self.table.clone(),
+            table: ctx.address(),
         };
 
         self.session = Some(
@@ -89,8 +91,71 @@ impl Handler<Umount> for FsActor {
     }
 }
 
+#[derive(Message)]
+#[rtype(result = "RmkFsResult<Vec<(u64, i64, FileType, String)>>")]
+pub struct ReadDir {
+    offset: usize,
+    ino: u64,
+}
+
+impl Handler<ReadDir> for FsActor {
+    type Result = ResponseFuture<RmkFsResult<Vec<(u64, i64, FileType, String)>>>;
+
+    fn handle(&mut self, msg: ReadDir, _ctx: &mut Self::Context) -> Self::Result {
+        let table = self.table.clone();
+
+        Box::pin(async move {
+            let batches = table
+                .send(Query::new("select ino, type, name from metadata"))
+                .await
+                .unwrap()
+                .unwrap()
+                .collect()
+                .await
+                .unwrap();
+
+            let mut dirs = Vec::new();
+
+            for batch in batches {
+                let inos = batch
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
+
+                let types = batch
+                    .column(3)
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap();
+
+                let names = batch
+                    .column(2)
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap();
+
+                for (i, (ino, typ, name)) in izip!(inos, types, names).enumerate().skip(msg.offset)
+                {
+                    if let (Some(ino), Some(typ), Some(name)) = (ino, typ, name) {
+                        let typ = if typ == "DocumentType" {
+                            FileType::RegularFile
+                        } else {
+                            FileType::Directory
+                        };
+
+                        dirs.push((ino, (i + 1) as i64, typ, name.to_owned()));
+                    }
+                }
+            }
+
+            Ok(dirs)
+        })
+    }
+}
+
 struct Fs {
-    table: Addr<TableActor>,
+    table: Addr<FsActor>,
 }
 
 impl Filesystem for Fs {
@@ -101,52 +166,39 @@ impl Filesystem for Fs {
         name: &std::ffi::OsStr,
         reply: fuser::ReplyEntry,
     ) {
-        let table = self.table.clone();
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let r = rt
-            .block_on(tokio::spawn(async move {
-                table.send(Query::new("select * from metadata")).await
-            }))
-            .unwrap()
-            .unwrap()
-            .unwrap();
-
-        r.show();
-
-        // let r = r.join().unwrap().unwrap();
     }
 
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
+        let sys = System::new();
+    }
+
+    fn readdir(
+        &mut self,
+        _req: &fuser::Request<'_>,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        mut reply: fuser::ReplyDirectory,
+    ) {
         let table = self.table.clone();
 
-        table.send(Query::new("select * from metadata"));
-
-        // let arb = Arbiter::new();
         let sys = System::new();
 
         let r = sys.block_on(async {
-            let df = table
-                .send(Query::new("select * from metadata"))
+            table
+                .send(ReadDir {
+                    offset: offset as usize,
+                    ino,
+                })
                 .await
                 .unwrap()
                 .unwrap()
-                .collect()
-                .await
-                .unwrap();
         });
 
-        // let r = rt
-        //     .block_on(tokio::spawn(async move {
-        //         table.send(Query::new("select * from metadata")).await
-        //     }))
-        //     .unwrap()
-        //     .unwrap()
-        //     .unwrap();
-
-        // r.show();
+        for (ino, i, typ, name) in r {
+            if reply.add(ino, i, typ, name) {
+                break;
+            }
+        }
     }
 }

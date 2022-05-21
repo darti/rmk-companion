@@ -22,7 +22,7 @@ impl TableActor {
         let context = SessionContext::new();
         let table = Arc::new(RmkTable::new(root));
 
-        let mut fs = Self {
+        let fs = Self {
             table: table.clone(),
             context,
         };
@@ -65,7 +65,7 @@ impl Handler<Query> for TableActor {
     type Result = AtomicResponse<Self, Result<Arc<DataFrame>, DataFusionError>>;
 
     fn handle(&mut self, msg: Query, _ctx: &mut Self::Context) -> Self::Result {
-        let mut context = self.context.clone();
+        let context = self.context.clone();
 
         let query = msg.0.clone();
 
