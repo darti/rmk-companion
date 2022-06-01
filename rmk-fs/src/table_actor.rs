@@ -3,9 +3,15 @@ use std::sync::Arc;
 
 use actix::prelude::*;
 use actix::Actor;
+use arrow::array::StringArray;
+use arrow::array::UInt64Array;
+use arrow::record_batch::RecordBatch;
 use datafusion::dataframe::DataFrame;
+use datafusion::datasource::MemTable;
 use datafusion::error::DataFusionError;
+use datafusion::from_slice::FromSlice;
 use datafusion::prelude::SessionContext;
+use datafusion::prelude::*;
 use log::debug;
 use log::info;
 
@@ -22,12 +28,36 @@ impl TableActor {
         let context = SessionContext::new();
         let table = Arc::new(RmkTable::new(root));
 
+        let batch = RecordBatch::try_new(
+            table.schema(),
+            vec![
+                Arc::new(StringArray::from_slice(&[".", ".."])),
+                Arc::new(StringArray::from_slice(&[".", ".."])),
+                Arc::new(StringArray::from_slice(&[
+                    "CollectionType",
+                    "CollectionType",
+                ])),
+                Arc::new(StringArray::from_slice(&["", ""])),
+                Arc::new(UInt64Array::from_slice(&[1, 1])),
+            ],
+        )?;
+
+        let provider = Arc::new(MemTable::try_new(table.schema(), vec![vec![batch]])?);
+
         let fs = Self {
             table: table.clone(),
             context,
         };
 
-        fs.context.register_table("metadata", table)?;
+        fs.context.register_table("metadata_dynamic", table)?;
+        fs.context.register_table("metadata_static", provider)?;
+
+        let union = fs
+            .context
+            .table("metadata_dynamic")?
+            .union(fs.context.table("metadata_static")?)?;
+
+        fs.context.register_table("metadata", union)?;
 
         Ok(fs)
     }

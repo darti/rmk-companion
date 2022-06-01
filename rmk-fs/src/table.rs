@@ -28,6 +28,16 @@ use std::hash::{Hash, Hasher};
 
 use crate::errors::{RmkFsError, RmkFsResult};
 
+pub fn schema() -> SchemaRef {
+    SchemaRef::new(Schema::new(vec![
+        Field::new("id", DataType::Utf8, false),
+        Field::new("type", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("parent", DataType::Utf8, true),
+        Field::new("ino", DataType::UInt64, false),
+    ]))
+}
+
 struct RmkTableInner {
     data: HashMap<String, Metadata>,
     root: PathBuf,
@@ -87,19 +97,17 @@ impl Display for RmkTable {
 impl RmkTable {
     pub fn new(root: &PathBuf) -> Self {
         Self {
-            schema: SchemaRef::new(Schema::new(vec![
-                Field::new("id", DataType::Utf8, false),
-                Field::new("type", DataType::Utf8, false),
-                Field::new("name", DataType::Utf8, false),
-                Field::new("parent", DataType::Utf8, true),
-                Field::new("ino", DataType::UInt64, false),
-            ])),
+            schema: schema(),
             inner: Arc::new(RwLock::new(RmkTableInner::new(root.clone()))),
         }
     }
 
     pub fn scan(&self) -> RmkFsResult<()> {
         self.inner.write().unwrap().scan()
+    }
+
+    pub fn schema(&self) -> SchemaRef {
+        self.schema.clone()
     }
 }
 

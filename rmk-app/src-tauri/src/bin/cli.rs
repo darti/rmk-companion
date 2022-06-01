@@ -17,12 +17,12 @@ async fn main() -> Result<()> {
     let file_watcher = TableActor::try_new(&root)?.start();
     file_watcher.send(Scan).await??;
 
-    let fs_mounter = SyncArbiter::start(2, move || FsActor::new(&mountpoint, file_watcher.clone()));
+    let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
 
     fs_mounter.send(Mount).await??;
 
     shutdown_manager(async {
-        fs_mounter.send(Umount).await;
+        fs_mounter.send(Umount).await.unwrap().unwrap();
     })
     .await;
 

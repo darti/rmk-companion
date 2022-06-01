@@ -1,13 +1,17 @@
 use std::path::PathBuf;
+use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 use actix::prelude::*;
 use actix::Actor;
 use arrow::array::StringArray;
 use arrow::array::UInt64Array;
 use fuser::BackgroundSession;
+use fuser::FileAttr;
 use fuser::FileType;
 use fuser::Filesystem;
 use fuser::MountOption;
+use log::error;
 use log::info;
 
 use crate::errors::RmkFsError;
@@ -15,6 +19,9 @@ use crate::errors::RmkFsResult;
 use crate::Query;
 use crate::TableActor;
 use itertools::izip;
+
+pub const TTL: Duration = Duration::from_secs(1); // 1 second
+
 pub struct FsActor {
     mountpoint: PathBuf,
     session: Option<BackgroundSession>,
@@ -32,7 +39,7 @@ impl FsActor {
 }
 
 impl Actor for FsActor {
-    type Context = SyncContext<Self>;
+    type Context = Context<Self>;
 }
 
 #[derive(Message)]
@@ -106,7 +113,10 @@ impl Handler<ReadDir> for FsActor {
 
         Box::pin(async move {
             let batches = table
-                .send(Query::new("select ino, type, name from metadata"))
+                .send(Query::new(&format!(
+                    "select ino, type, name from metadata where parent = {}",
+                    msg.ino
+                )))
                 .await
                 .unwrap()
                 .unwrap()
@@ -154,6 +164,81 @@ impl Handler<ReadDir> for FsActor {
     }
 }
 
+#[derive(Message)]
+#[rtype(result = "RmkFsResult<FileAttr>")]
+pub struct GetAttr {
+    ino: u64,
+}
+
+impl Handler<GetAttr> for FsActor {
+    type Result = ResponseFuture<RmkFsResult<FileAttr>>;
+
+    fn handle(&mut self, msg: GetAttr, _ctx: &mut Self::Context) -> Self::Result {
+        let table = self.table.clone();
+
+        Box::pin(async move {
+            let batch = table
+                .send(Query::new(&format!(
+                    "select type from metadata where ino = {}",
+                    msg.ino
+                )))
+                .await;
+
+            let batches = match batch {
+                Ok(Ok(batch)) => batch,
+                Ok(Err(err)) => return Err(RmkFsError::DataFusionError(err)),
+                Err(err) => return Err(RmkFsError::ActorError(err)),
+            };
+
+            // let batch = batches.collect().await;
+
+            // .map_err(|e| RmkFsError::ActorError(e))
+            // .map_err(|e|)
+            // .and_then(|d| )
+            // .unwrap()
+            // .unwrap()
+            // .collect()
+            // .await
+            // .unwrap()
+            // .pop()
+            // .unwrap();
+
+            // let typ = batch
+            //     .column(3)
+            //     .as_any()
+            //     .downcast_ref::<StringArray>()
+            //     .unwrap()
+            //     .value(0);
+
+            // let typ = if typ == "DocumentType" {
+            //     FileType::RegularFile
+            // } else {
+            //     FileType::Directory
+            // };
+
+            let attr = FileAttr {
+                ino: msg.ino,
+                size: 0,
+                blocks: 0,
+                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                mtime: UNIX_EPOCH,
+                ctime: UNIX_EPOCH,
+                crtime: UNIX_EPOCH,
+                kind: FileType::Directory,
+                perm: 0o755,
+                nlink: 2,
+                uid: 501,
+                gid: 20,
+                rdev: 0,
+                flags: 0,
+                blksize: 512,
+            };
+
+            Ok(attr)
+        })
+    }
+}
+
 struct Fs {
     table: Addr<FsActor>,
 }
@@ -162,14 +247,31 @@ impl Filesystem for Fs {
     fn lookup(
         &mut self,
         _req: &fuser::Request<'_>,
-        parent: u64,
-        name: &std::ffi::OsStr,
+        _parent: u64,
+        _name: &std::ffi::OsStr,
         reply: fuser::ReplyEntry,
     ) {
+        reply.error(libc::ENOENT);
     }
 
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
+        let table = self.table.clone();
+
         let sys = System::new();
+
+        let r = sys.block_on(async move { table.send(GetAttr { ino }).await });
+
+        match r {
+            Ok(Ok(attr)) => reply.attr(&TTL, &attr),
+            Ok(Err(err)) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT)
+            }
+            Err(err) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT)
+            }
+        }
     }
 
     fn readdir(
@@ -196,6 +298,7 @@ impl Filesystem for Fs {
         });
 
         for (ino, i, typ, name) in r {
+            info!("{}", name);
             if reply.add(ino, i, typ, name) {
                 break;
             }

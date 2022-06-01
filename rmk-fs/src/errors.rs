@@ -17,9 +17,14 @@ pub enum RmkFsError {
     NotebookError(#[from] rmk_notebook::Error),
     #[error(transparent)]
     DataFusionError(#[from] datafusion::error::DataFusionError),
+    #[error(transparent)]
+    ActorError(#[from] actix::MailboxError),
 
     #[error("fuser error")]
     FuserError,
+
+    #[error("ino {0} not found")]
+    NotFound(u64),
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;
