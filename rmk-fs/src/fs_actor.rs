@@ -264,84 +264,8 @@ impl Handler<GetAttr> for FsActor {
         let table = self.table.clone();
 
         Box::pin(async move {
-            let batch = table
-                .send(Query::new(&format!(
-                    "select distinct ino, type from metadata where ino = {}",
-                    msg.ino
-                )))
-                .await;
-
-            let batches = match batch {
-                Ok(Ok(batch)) => batch,
-                Ok(Err(err)) => return Err(RmkFsError::DataFusionError(err)),
-                Err(err) => return Err(RmkFsError::ActorError(err)),
-            };
-
-            let batches = batches.collect().await.unwrap();
-
-            let typ = batches
-                .iter()
-                .map(|b| {
-                    if b.num_rows() == 0 {
-                        None
-                    } else {
-                        Some(
-                            b.column(1)
-                                .as_any()
-                                .downcast_ref::<StringArray>()
-                                .unwrap()
-                                .value(0),
-                        )
-                    }
-                })
-                .flatten()
-                .next();
-
-            match typ {
-                Some("DocumentType") => {
-                    Ok(Some(FileAttr {
-                        ino: msg.ino,
-                        size: 0,
-                        blocks: 0,
-                        atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                        mtime: UNIX_EPOCH,
-                        ctime: UNIX_EPOCH,
-                        crtime: UNIX_EPOCH,
-                        kind: FileType::RegularFile,
-                        perm: 0o755,
-                        nlink: 2,
-                        uid: 501,
-                        gid: 20,
-                        rdev: 0,
-                        flags: 0,
-                        blksize: 512,
-                    }))
-                }
-
-                Some("CollectionType") => {
-                    Ok(Some(FileAttr {
-                        ino: msg.ino,
-                        size: 0,
-                        blocks: 0,
-                        atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                        mtime: UNIX_EPOCH,
-                        ctime: UNIX_EPOCH,
-                        crtime: UNIX_EPOCH,
-                        kind: FileType::Directory,
-                        perm: 0o755,
-                        nlink: 2,
-                        uid: 501,
-                        gid: 20,
-                        rdev: 0,
-                        flags: 0,
-                        blksize: 512,
-                    }))
-                }
-
-                Some(t) => Err(RmkFsError::UnknownFileType(t.to_string())),
-
-                None => Ok(None),
-            }
+            let condition = format!("ino = {}", msg.ino);
+            Ok(FsActor::search(table, &condition).await.unwrap().pop())
         })
     }
 }
