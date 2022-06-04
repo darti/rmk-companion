@@ -11,7 +11,6 @@ use datafusion::datasource::MemTable;
 use datafusion::error::DataFusionError;
 use datafusion::from_slice::FromSlice;
 use datafusion::prelude::SessionContext;
-use datafusion::prelude::*;
 use log::debug;
 use log::info;
 
@@ -31,12 +30,12 @@ impl TableActor {
         let batch = RecordBatch::try_new(
             table.schema(),
             vec![
-                Arc::new(StringArray::from_slice(&[".", ".."])),
-                Arc::new(StringArray::from_slice(&[".", ".."])),
+                Arc::new(StringArray::from_slice(&["root", "root"])),
                 Arc::new(StringArray::from_slice(&[
                     "CollectionType",
                     "CollectionType",
                 ])),
+                Arc::new(StringArray::from_slice(&[".", ".."])),
                 Arc::new(StringArray::from_slice(&["", ""])),
                 Arc::new(UInt64Array::from_slice(&[1, 1])),
             ],

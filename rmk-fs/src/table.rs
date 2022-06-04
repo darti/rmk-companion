@@ -1,5 +1,5 @@
 use arrow::{
-    array::{StringBuilder, UInt64Builder},
+    array::{ArrayBuilder, StringBuilder, UInt64Builder},
     datatypes::{DataType, Field, Schema, SchemaRef},
     record_batch::RecordBatch,
 };
@@ -18,13 +18,14 @@ use std::{
     any::Any,
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::{Debug, Display},
+    hash::Hash,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
 
 use log::{debug, info};
 use rmk_notebook::{read_metadata, Metadata};
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 
 use crate::errors::{RmkFsError, RmkFsResult};
 
@@ -189,7 +190,7 @@ impl ExecutionPlan for FsExecPlan {
         self: Arc<Self>,
         _children: Vec<Arc<dyn ExecutionPlan>>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        todo!("FsExecPlan::with_new_children")
+        Ok(self)
     }
 
     fn execute(
@@ -202,42 +203,77 @@ impl ExecutionPlan for FsExecPlan {
             table.data.clone()
         };
 
-        let mut id_array = StringBuilder::new(nodes.len());
-        let mut type_array = StringBuilder::new(nodes.len());
-        let mut name_array = StringBuilder::new(nodes.len());
-        let mut parent_array = StringBuilder::new(nodes.len());
-        let mut ino_array = UInt64Builder::new(nodes.len());
+        let projection = self
+            .projection
+            .as_ref()
+            .map(|p| p.clone())
+            .unwrap_or_else(|| (0..self.table.schema().fields().len()).collect());
+
+        let mut arrays: Vec<Box<dyn ArrayBuilder>> = projection
+            .iter()
+            .map(|i| match i {
+                0 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                1 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                2 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                3 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                4 => Box::new(UInt64Builder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                _ => unreachable!(),
+            })
+            .collect();
 
         for (id, metadata) in nodes {
-            id_array.append_value(&id)?;
-            type_array.append_value(&metadata.typ)?;
-            name_array.append_value(&metadata.visible_name)?;
+            for (i, p) in projection.iter().enumerate() {
+                match p {
+                    0 => arrays[i]
+                        .as_any_mut()
+                        .downcast_mut::<StringBuilder>()
+                        .map(|a| a.append_value(&id)),
 
-            if let Some(parent) = metadata.parent {
-                parent_array.append_value(&parent)?;
-            } else {
-                parent_array.append_null()?;
+                    1 => arrays[i]
+                        .as_any_mut()
+                        .downcast_mut::<StringBuilder>()
+                        .map(|a| a.append_value(&metadata.typ)),
+
+                    2 => arrays[i]
+                        .as_any_mut()
+                        .downcast_mut::<StringBuilder>()
+                        .map(|a| a.append_value(&metadata.visible_name)),
+
+                    3 => {
+                        if let Some(parent) = &metadata.parent {
+                            arrays[i]
+                                .as_any_mut()
+                                .downcast_mut::<StringBuilder>()
+                                .map(|a| a.append_value(&parent))
+                        } else {
+                            arrays[i]
+                                .as_any_mut()
+                                .downcast_mut::<StringBuilder>()
+                                .map(|a| a.append_null())
+                        }
+                    }
+
+                    4 => {
+                        let mut s = DefaultHasher::new();
+                        id.hash(&mut s);
+
+                        arrays[i]
+                            .as_any_mut()
+                            .downcast_mut::<UInt64Builder>()
+                            .map(|a| a.append_value(s.finish()))
+                    }
+
+                    _ => None,
+                };
             }
-
-            let mut s = DefaultHasher::new();
-            id.hash(&mut s);
-
-            ino_array.append_value(s.finish())?;
         }
 
+        let arrays = arrays.iter_mut().map(|a| a.finish()).collect();
+
         Ok(Box::pin(MemoryStream::try_new(
-            vec![RecordBatch::try_new(
-                self.projected_schema.clone(),
-                vec![
-                    Arc::new(id_array.finish()),
-                    Arc::new(type_array.finish()),
-                    Arc::new(name_array.finish()),
-                    Arc::new(parent_array.finish()),
-                    Arc::new(ino_array.finish()),
-                ],
-            )?],
+            vec![RecordBatch::try_new(self.projected_schema.clone(), arrays)?],
             self.schema(),
-            self.projection.clone(),
+            None,
         )?))
     }
 

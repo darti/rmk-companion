@@ -11,6 +11,7 @@ use fuser::FileAttr;
 use fuser::FileType;
 use fuser::Filesystem;
 use fuser::MountOption;
+use log::debug;
 use log::error;
 use log::info;
 
@@ -134,7 +135,7 @@ impl Handler<ReadDir> for FsActor {
                     .unwrap();
 
                 let types = batch
-                    .column(3)
+                    .column(1)
                     .as_any()
                     .downcast_ref::<StringArray>()
                     .unwrap();
@@ -165,13 +166,13 @@ impl Handler<ReadDir> for FsActor {
 }
 
 #[derive(Message)]
-#[rtype(result = "RmkFsResult<FileAttr>")]
+#[rtype(result = "RmkFsResult<Option<FileAttr>>")]
 pub struct GetAttr {
     ino: u64,
 }
 
 impl Handler<GetAttr> for FsActor {
-    type Result = ResponseFuture<RmkFsResult<FileAttr>>;
+    type Result = ResponseFuture<RmkFsResult<Option<FileAttr>>>;
 
     fn handle(&mut self, msg: GetAttr, _ctx: &mut Self::Context) -> Self::Result {
         let table = self.table.clone();
@@ -179,7 +180,7 @@ impl Handler<GetAttr> for FsActor {
         Box::pin(async move {
             let batch = table
                 .send(Query::new(&format!(
-                    "select type from metadata where ino = {}",
+                    "select distinct ino, type from metadata where ino = {}",
                     msg.ino
                 )))
                 .await;
@@ -190,51 +191,71 @@ impl Handler<GetAttr> for FsActor {
                 Err(err) => return Err(RmkFsError::ActorError(err)),
             };
 
-            // let batch = batches.collect().await;
+            let batches = batches.collect().await.unwrap();
 
-            // .map_err(|e| RmkFsError::ActorError(e))
-            // .map_err(|e|)
-            // .and_then(|d| )
-            // .unwrap()
-            // .unwrap()
-            // .collect()
-            // .await
-            // .unwrap()
-            // .pop()
-            // .unwrap();
+            let typ = batches
+                .iter()
+                .map(|b| {
+                    if b.num_rows() == 0 {
+                        None
+                    } else {
+                        Some(
+                            b.column(1)
+                                .as_any()
+                                .downcast_ref::<StringArray>()
+                                .unwrap()
+                                .value(0),
+                        )
+                    }
+                })
+                .flatten()
+                .next();
 
-            // let typ = batch
-            //     .column(3)
-            //     .as_any()
-            //     .downcast_ref::<StringArray>()
-            //     .unwrap()
-            //     .value(0);
+            match typ {
+                Some("DocumentType") => {
+                    Ok(Some(FileAttr {
+                        ino: msg.ino,
+                        size: 0,
+                        blocks: 0,
+                        atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                        mtime: UNIX_EPOCH,
+                        ctime: UNIX_EPOCH,
+                        crtime: UNIX_EPOCH,
+                        kind: FileType::RegularFile,
+                        perm: 0o755,
+                        nlink: 2,
+                        uid: 501,
+                        gid: 20,
+                        rdev: 0,
+                        flags: 0,
+                        blksize: 512,
+                    }))
+                }
 
-            // let typ = if typ == "DocumentType" {
-            //     FileType::RegularFile
-            // } else {
-            //     FileType::Directory
-            // };
+                Some("CollectionType") => {
+                    Ok(Some(FileAttr {
+                        ino: msg.ino,
+                        size: 0,
+                        blocks: 0,
+                        atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                        mtime: UNIX_EPOCH,
+                        ctime: UNIX_EPOCH,
+                        crtime: UNIX_EPOCH,
+                        kind: FileType::Directory,
+                        perm: 0o755,
+                        nlink: 2,
+                        uid: 501,
+                        gid: 20,
+                        rdev: 0,
+                        flags: 0,
+                        blksize: 512,
+                    }))
+                }
 
-            let attr = FileAttr {
-                ino: msg.ino,
-                size: 0,
-                blocks: 0,
-                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                mtime: UNIX_EPOCH,
-                ctime: UNIX_EPOCH,
-                crtime: UNIX_EPOCH,
-                kind: FileType::Directory,
-                perm: 0o755,
-                nlink: 2,
-                uid: 501,
-                gid: 20,
-                rdev: 0,
-                flags: 0,
-                blksize: 512,
-            };
+                Some(t) => Err(RmkFsError::UnknownFileType(t.to_string())),
 
-            Ok(attr)
+                None => Ok(None),
+            }
         })
     }
 }
@@ -262,7 +283,8 @@ impl Filesystem for Fs {
         let r = sys.block_on(async move { table.send(GetAttr { ino }).await });
 
         match r {
-            Ok(Ok(attr)) => reply.attr(&TTL, &attr),
+            Ok(Ok(Some(attr))) => reply.attr(&TTL, &attr),
+            Ok(Ok(None)) => reply.error(libc::ENOENT),
             Ok(Err(err)) => {
                 error!("{:?}", err);
                 reply.error(libc::ENOENT)

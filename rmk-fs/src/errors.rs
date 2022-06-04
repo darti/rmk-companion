@@ -25,6 +25,9 @@ pub enum RmkFsError {
 
     #[error("ino {0} not found")]
     NotFound(u64),
+
+    #[error("unknown file type: {0}")]
+    UnknownFileType(String),
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;
