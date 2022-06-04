@@ -36,6 +36,7 @@ pub fn schema() -> SchemaRef {
         Field::new("name", DataType::Utf8, false),
         Field::new("parent", DataType::Utf8, true),
         Field::new("ino", DataType::UInt64, false),
+        Field::new("parent_ino", DataType::UInt64, false),
     ]))
 }
 
@@ -217,6 +218,7 @@ impl ExecutionPlan for FsExecPlan {
                 2 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
                 3 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
                 4 => Box::new(UInt64Builder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                5 => Box::new(UInt64Builder::new(nodes.len())) as Box<dyn ArrayBuilder>,
                 _ => unreachable!(),
             })
             .collect();
@@ -261,6 +263,22 @@ impl ExecutionPlan for FsExecPlan {
                             .as_any_mut()
                             .downcast_mut::<UInt64Builder>()
                             .map(|a| a.append_value(s.finish()))
+                    }
+
+                    5 => {
+                        let p = match &metadata.parent {
+                            Some(p) => {
+                                let mut s = DefaultHasher::new();
+                                p.hash(&mut s);
+                                s.finish()
+                            }
+                            None => 1,
+                        };
+
+                        arrays[i]
+                            .as_any_mut()
+                            .downcast_mut::<UInt64Builder>()
+                            .map(|a| a.append_value(p))
                     }
 
                     _ => None,

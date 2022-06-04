@@ -38,6 +38,7 @@ impl TableActor {
                 Arc::new(StringArray::from_slice(&[".", ".."])),
                 Arc::new(StringArray::from_slice(&["", ""])),
                 Arc::new(UInt64Array::from_slice(&[1, 1])),
+                Arc::new(UInt64Array::from_slice(&[1, 1])),
             ],
         )?;
 

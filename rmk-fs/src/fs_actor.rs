@@ -11,7 +11,7 @@ use fuser::FileAttr;
 use fuser::FileType;
 use fuser::Filesystem;
 use fuser::MountOption;
-use log::debug;
+
 use log::error;
 use log::info;
 
@@ -36,6 +36,91 @@ impl FsActor {
             session: None,
             table: addr,
         }
+    }
+
+    async fn search(table: Addr<TableActor>, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
+        let query = format!(
+            "select distinct ino, type from metadata where {}",
+            condition
+        );
+
+        let batch = table.send(Query::new(&query)).await;
+
+        let batches = match batch {
+            Ok(Ok(batch)) => batch,
+            Ok(Err(err)) => return Err(RmkFsError::DataFusionError(err)),
+            Err(err) => return Err(RmkFsError::ActorError(err)),
+        };
+
+        let batches = batches.collect().await.unwrap();
+
+        let mut attrs = Vec::new();
+
+        for batch in batches {
+            let inos = batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap();
+
+            let types = batch
+                .column(1)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap();
+
+            for (ino, typ) in izip!(inos, types) {
+                if let (Some(ino), Some(typ)) = (ino, typ) {
+                    let attr = match typ {
+                        "DocumentType" => {
+                            attrs.push(FileAttr {
+                                ino,
+                                size: 0,
+                                blocks: 0,
+                                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                                mtime: UNIX_EPOCH,
+                                ctime: UNIX_EPOCH,
+                                crtime: UNIX_EPOCH,
+                                kind: FileType::RegularFile,
+                                perm: 0o755,
+                                nlink: 2,
+                                uid: 501,
+                                gid: 20,
+                                rdev: 0,
+                                flags: 0,
+                                blksize: 512,
+                            });
+                        }
+
+                        "CollectionType" => {
+                            attrs.push(FileAttr {
+                                ino,
+                                size: 0,
+                                blocks: 0,
+                                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                                mtime: UNIX_EPOCH,
+                                ctime: UNIX_EPOCH,
+                                crtime: UNIX_EPOCH,
+                                kind: FileType::Directory,
+                                perm: 0o755,
+                                nlink: 2,
+                                uid: 501,
+                                gid: 20,
+                                rdev: 0,
+                                flags: 0,
+                                blksize: 512,
+                            });
+                        }
+
+                        t => {
+                            error!("Unknown type: {}", t);
+                        }
+                    };
+                }
+            }
+        }
+
+        Ok(attrs)
     }
 }
 
@@ -115,15 +200,16 @@ impl Handler<ReadDir> for FsActor {
         Box::pin(async move {
             let batches = table
                 .send(Query::new(&format!(
-                    "select ino, type, name from metadata where parent = {}",
+                    "select ino, type, name, parent_ino from metadata where parent_ino = {}",
                     msg.ino
                 )))
                 .await
                 .unwrap()
-                .unwrap()
-                .collect()
-                .await
                 .unwrap();
+
+            batches.show().await.unwrap();
+
+            let batches = batches.collect().await.unwrap();
 
             let mut dirs = Vec::new();
 
@@ -260,6 +346,26 @@ impl Handler<GetAttr> for FsActor {
     }
 }
 
+#[derive(Message)]
+#[rtype(result = "RmkFsResult<Option<FileAttr>>")]
+pub struct Lookup {
+    name: String,
+    parent: u64,
+}
+
+impl Handler<Lookup> for FsActor {
+    type Result = ResponseFuture<RmkFsResult<Option<FileAttr>>>;
+
+    fn handle(&mut self, msg: Lookup, _ctx: &mut Self::Context) -> Self::Result {
+        let table = self.table.clone();
+
+        Box::pin(async move {
+            let condition = format!("parent_ino = {} and name = '{}'", msg.parent, msg.name);
+            Ok(FsActor::search(table, &condition).await.unwrap().pop())
+        })
+    }
+}
+
 struct Fs {
     table: Addr<FsActor>,
 }
@@ -268,11 +374,35 @@ impl Filesystem for Fs {
     fn lookup(
         &mut self,
         _req: &fuser::Request<'_>,
-        _parent: u64,
-        _name: &std::ffi::OsStr,
+        parent: u64,
+        name: &std::ffi::OsStr,
         reply: fuser::ReplyEntry,
     ) {
-        reply.error(libc::ENOENT);
+        let table = self.table.clone();
+
+        let sys = System::new();
+
+        let r = sys.block_on(async move {
+            table
+                .send(Lookup {
+                    name: name.to_string_lossy().into_owned(),
+                    parent,
+                })
+                .await
+        });
+
+        match r {
+            Ok(Ok(Some(attr))) => reply.entry(&TTL, &attr, 0),
+            Ok(Ok(None)) => reply.error(libc::ENOENT),
+            Ok(Err(err)) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT)
+            }
+            Err(err) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT)
+            }
+        }
     }
 
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
@@ -320,10 +450,11 @@ impl Filesystem for Fs {
         });
 
         for (ino, i, typ, name) in r {
-            info!("{}", name);
             if reply.add(ino, i, typ, name) {
                 break;
             }
         }
+
+        reply.ok();
     }
 }
