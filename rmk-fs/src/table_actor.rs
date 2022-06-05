@@ -15,6 +15,7 @@ use log::debug;
 use log::info;
 
 use crate::errors::RmkFsResult;
+use crate::table::RmkNode;
 use crate::RmkTable;
 
 pub struct TableActor {
@@ -27,18 +28,31 @@ impl TableActor {
         let context = SessionContext::new();
         let table = Arc::new(RmkTable::new(root));
 
+        let static_files = [
+            RmkNode::new("root", "CollectionType", ".", None, 1, 1),
+            RmkNode::new("root", "CollectionType", "..", None, 1, 1),
+        ];
+
+        let mut acc = (vec![], vec![], vec![], vec![], vec![], vec![]);
+
+        for n in static_files.iter() {
+            acc.0.push(n.id);
+            acc.1.push(n.typ);
+            acc.2.push(n.name);
+            acc.3.push(n.parent);
+            acc.4.push(n.ino);
+            acc.5.push(n.parent_ino);
+        }
+
         let batch = RecordBatch::try_new(
             table.schema(),
             vec![
-                Arc::new(StringArray::from_slice(&["root", "root"])),
-                Arc::new(StringArray::from_slice(&[
-                    "CollectionType",
-                    "CollectionType",
-                ])),
-                Arc::new(StringArray::from_slice(&[".", ".."])),
-                Arc::new(StringArray::from_slice(&["", ""])),
-                Arc::new(UInt64Array::from_slice(&[1, 1])),
-                Arc::new(UInt64Array::from_slice(&[1, 1])),
+                Arc::new(StringArray::from(acc.0)),
+                Arc::new(StringArray::from(acc.1)),
+                Arc::new(StringArray::from(acc.2)),
+                Arc::new(StringArray::from(acc.3)),
+                Arc::new(UInt64Array::from(acc.4)),
+                Arc::new(UInt64Array::from(acc.5)),
             ],
         )?;
 

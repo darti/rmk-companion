@@ -40,6 +40,35 @@ pub fn schema() -> SchemaRef {
     ]))
 }
 
+pub struct RmkNode<'a> {
+    pub id: &'a str,
+    pub typ: &'a str,
+    pub name: &'a str,
+    pub parent: Option<&'a str>,
+    pub ino: u64,
+    pub parent_ino: u64,
+}
+
+impl<'a> RmkNode<'a> {
+    pub fn new(
+        id: &'a str,
+        typ: &'a str,
+        name: &'a str,
+        parent: Option<&'a str>,
+        ino: u64,
+        parent_ino: u64,
+    ) -> Self {
+        Self {
+            id,
+            typ,
+            name,
+            parent,
+            ino,
+            parent_ino,
+        }
+    }
+}
+
 struct RmkTableInner {
     data: HashMap<String, Metadata>,
     root: PathBuf,

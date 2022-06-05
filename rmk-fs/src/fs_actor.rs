@@ -71,7 +71,7 @@ impl FsActor {
 
             for (ino, typ) in izip!(inos, types) {
                 if let (Some(ino), Some(typ)) = (ino, typ) {
-                    let attr = match typ {
+                    match typ {
                         "DocumentType" => {
                             attrs.push(FileAttr {
                                 ino,
