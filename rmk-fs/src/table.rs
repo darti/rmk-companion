@@ -47,10 +47,17 @@ pub struct RmkNode<'a> {
     pub parent: Option<&'a str>,
     pub ino: u64,
     pub parent_ino: u64,
+    pub content: Option<&'a [u8]>,
 }
 
 impl<'a> RmkNode<'a> {
-    pub fn new(id: &'a str, typ: &'a str, name: &'a str, parent: Option<&'a str>) -> Self {
+    pub fn new(
+        id: &'a str,
+        typ: &'a str,
+        name: &'a str,
+        parent: Option<&'a str>,
+        content: Option<&'a [u8]>,
+    ) -> Self {
         let ino = if id == "." {
             1
         } else {
@@ -77,6 +84,7 @@ impl<'a> RmkNode<'a> {
             parent,
             ino,
             parent_ino,
+            content,
         }
     }
 }

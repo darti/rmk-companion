@@ -3,13 +3,18 @@ use std::sync::Arc;
 
 use actix::prelude::*;
 use actix::Actor;
+use arrow::array::BinaryArray;
 use arrow::array::StringArray;
 use arrow::array::UInt64Array;
+use arrow::datatypes::DataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::Schema;
+use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use datafusion::dataframe::DataFrame;
 use datafusion::datasource::MemTable;
 use datafusion::error::DataFusionError;
-use datafusion::from_slice::FromSlice;
+
 use datafusion::prelude::SessionContext;
 use log::debug;
 use log::info;
@@ -29,48 +34,113 @@ impl TableActor {
         let table = Arc::new(RmkTable::new(root));
 
         let static_files = [
-            RmkNode::new(".", "CollectionType", ".", None),
-            RmkNode::new(".", "CollectionType", "..", None),
-            // RmkNode::new(
-            //     ".VolumeIcon.icns",
-            //     "CollectionType",
-            //     ".VolumeIcon.icns",
-            //     None,
-            // ),
+            RmkNode::new(".", "CollectionType", ".", None, None),
+            RmkNode::new(".", "CollectionType", "..", None, None),
+            RmkNode::new(
+                ".VolumeIcon.icns",
+                "DocumentType",
+                ".VolumeIcon.icns",
+                None,
+                Some(include_bytes!("../resources/.VolumeIcon.icns")),
+            ),
+            RmkNode::new(
+                "._.VolumeIcon.icns",
+                "DocumentType",
+                "._.VolumeIcon.icns",
+                None,
+                Some(include_bytes!("../resources/._.VolumeIcon.icns")),
+            ),
+            RmkNode::new(
+                "._.",
+                "DocumentType",
+                "._.",
+                None,
+                Some(include_bytes!("../resources/._.")),
+            ),
+            RmkNode::new(
+                "._.com.apple.timemachine.donotpresent",
+                "DocumentType",
+                "._.com.apple.timemachine.donotpresent",
+                None,
+                Some(include_bytes!(
+                    "../resources/._.com.apple.timemachine.donotpresent"
+                )),
+            ),
         ];
 
-        let mut acc = (vec![], vec![], vec![], vec![], vec![], vec![]);
+        let n = static_files.len();
 
-        for n in static_files.iter() {
-            acc.0.push(n.id);
-            acc.1.push(n.typ);
-            acc.2.push(n.name);
-            acc.3.push(n.parent);
-            acc.4.push(n.ino);
-            acc.5.push(n.parent_ino);
+        let mut metadata = (
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+        );
+        let mut content = (
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+            Vec::with_capacity(n),
+        );
+
+        for node in static_files.iter() {
+            metadata.0.push(node.id);
+            metadata.1.push(node.typ);
+            metadata.2.push(node.name);
+            metadata.3.push(node.parent);
+            metadata.4.push(node.ino);
+            metadata.5.push(node.parent_ino);
+
+            content.0.push(node.ino);
+            content.1.push(node.content.map_or(0, |c| c.len() as u64));
+            content.2.push(node.content);
         }
-
-        let batch = RecordBatch::try_new(
-            table.schema(),
-            vec![
-                Arc::new(StringArray::from(acc.0)),
-                Arc::new(StringArray::from(acc.1)),
-                Arc::new(StringArray::from(acc.2)),
-                Arc::new(StringArray::from(acc.3)),
-                Arc::new(UInt64Array::from(acc.4)),
-                Arc::new(UInt64Array::from(acc.5)),
-            ],
-        )?;
-
-        let provider = Arc::new(MemTable::try_new(table.schema(), vec![vec![batch]])?);
 
         let fs = Self {
             table: table.clone(),
             context,
         };
 
+        let metadata_provider = Arc::new(MemTable::try_new(
+            table.schema(),
+            vec![vec![RecordBatch::try_new(
+                table.schema(),
+                vec![
+                    Arc::new(StringArray::from(metadata.0)),
+                    Arc::new(StringArray::from(metadata.1)),
+                    Arc::new(StringArray::from(metadata.2)),
+                    Arc::new(StringArray::from(metadata.3)),
+                    Arc::new(UInt64Array::from(metadata.4)),
+                    Arc::new(UInt64Array::from(metadata.5)),
+                ],
+            )?]],
+        )?);
+
+        let content_schema = SchemaRef::new(Schema::new(vec![
+            Field::new("ino", DataType::UInt64, false),
+            Field::new("size", DataType::UInt64, false),
+            Field::new("content", DataType::Binary, true),
+        ]));
+
+        let content_provider = Arc::new(MemTable::try_new(
+            content_schema.clone(),
+            vec![vec![RecordBatch::try_new(
+                content_schema,
+                vec![
+                    Arc::new(UInt64Array::from(content.0)),
+                    Arc::new(UInt64Array::from(content.1)),
+                    Arc::new(BinaryArray::from(content.2)),
+                ],
+            )?]],
+        )?);
+
         fs.context.register_table("metadata_dynamic", table)?;
-        fs.context.register_table("metadata_static", provider)?;
+        fs.context
+            .register_table("metadata_static", metadata_provider)?;
+
+        fs.context
+            .register_table("content_static", content_provider)?;
 
         let union = fs
             .context

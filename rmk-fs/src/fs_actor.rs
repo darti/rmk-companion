@@ -4,6 +4,8 @@ use std::time::UNIX_EPOCH;
 
 use actix::prelude::*;
 use actix::Actor;
+use arrow::array::Array;
+use arrow::array::BinaryArray;
 use arrow::array::StringArray;
 use arrow::array::UInt64Array;
 use fuser::BackgroundSession;
@@ -41,7 +43,7 @@ impl FsActor {
 
     async fn search(table: Addr<TableActor>, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
         let query = format!(
-            "select distinct ino, type from metadata where {}",
+            "select distinct ino, type, size from metadata left join content_static on metadata.ino = content_static.ino where {}",
             condition
         );
 
@@ -70,14 +72,23 @@ impl FsActor {
                 .downcast_ref::<StringArray>()
                 .unwrap();
 
-            for (ino, typ) in izip!(inos, types) {
-                if let (Some(ino), Some(typ)) = (ino, typ) {
+            let sizes = batch
+                .column(2)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap();
+
+            for (ino, typ, size) in izip!(inos, types, sizes) {
+                if let (Some(ino), Some(typ), Some(size)) = (ino, typ, size) {
                     match typ {
                         "DocumentType" => {
+                            let blksize = 512;
+                            let blocks = (size + blksize - 1) / blksize;
+
                             attrs.push(FileAttr {
                                 ino,
-                                size: 0,
-                                blocks: 0,
+                                size,
+                                blocks,
                                 atime: UNIX_EPOCH, // 1970-01-01 00:00:00
                                 mtime: UNIX_EPOCH,
                                 ctime: UNIX_EPOCH,
@@ -89,7 +100,7 @@ impl FsActor {
                                 gid: 20,
                                 rdev: 0,
                                 flags: 0,
-                                blksize: 512,
+                                blksize: blksize as u32,
                             });
                         }
 
@@ -206,8 +217,6 @@ impl Handler<ReadDir> for FsActor {
                 .unwrap()
                 .unwrap();
 
-            batches.show().await.unwrap();
-
             let batches = batches.collect().await.unwrap();
 
             let mut dirs = Vec::new();
@@ -285,6 +294,44 @@ impl Handler<Lookup> for FsActor {
         Box::pin(async move {
             let condition = format!("parent_ino = {} and name = '{}'", msg.parent, msg.name);
             Ok(FsActor::search(table, &condition).await.unwrap().pop())
+        })
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "RmkFsResult<Option<Vec<u8>>>")]
+pub struct Read {
+    pub ino: u64,
+    pub offset: i64,
+    pub size: u32,
+}
+
+impl Handler<Read> for FsActor {
+    type Result = ResponseFuture<RmkFsResult<Option<Vec<u8>>>>;
+
+    fn handle(&mut self, msg: Read, _ctx: &mut Self::Context) -> Self::Result {
+        let table = self.table.clone();
+
+        Box::pin(async move {
+            let query = format!("select content from content_static where ino = {}", msg.ino);
+
+            let batches = table.send(Query::new(&query)).await.unwrap().unwrap();
+
+            let batches = batches.collect().await.unwrap();
+
+            for batch in batches {
+                let content = batch
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<BinaryArray>()
+                    .unwrap();
+
+                if content.len() > 0 {
+                    return Ok(Some(content.value(0).to_vec()));
+                }
+            }
+
+            Ok(None)
         })
     }
 }

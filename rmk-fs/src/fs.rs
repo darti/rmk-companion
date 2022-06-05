@@ -1,8 +1,9 @@
 use actix::{Addr, System};
-use fuser::Filesystem;
+use datafusion::parquet::data_type::AsBytes;
+use fuser::{Filesystem, ReplyData, Request};
 use log::{error, info};
 
-use crate::{FsActor, GetAttr, Lookup, ReadDir, TTL};
+use crate::{FsActor, GetAttr, Lookup, Read, ReadDir, TTL};
 
 pub(crate) struct Fs {
     table: Addr<FsActor>,
@@ -78,7 +79,6 @@ impl Filesystem for Fs {
         offset: i64,
         mut reply: fuser::ReplyDirectory,
     ) {
-        info!("Readdir: {:?}", ino);
         let table = self.table.clone();
 
         let sys = System::new();
@@ -101,5 +101,39 @@ impl Filesystem for Fs {
         }
 
         reply.ok();
+    }
+
+    fn read(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock: Option<u64>,
+        reply: ReplyData,
+    ) {
+        let table = self.table.clone();
+
+        let sys = System::new();
+
+        let r = sys.block_on(async {
+            table
+                .send(Read { ino, offset, size })
+                .await
+                .unwrap()
+                .unwrap()
+        });
+
+        match r {
+            Some(content) => {
+                let from = offset as usize;
+                let to = from + size as usize;
+
+                reply.data(&content[from..to].as_bytes())
+            }
+            None => reply.error(libc::ENOENT),
+        };
     }
 }
