@@ -1,7 +1,7 @@
 use actix::{Addr, System};
 use datafusion::parquet::data_type::AsBytes;
 use fuser::{Filesystem, ReplyData, Request};
-use log::{error, info};
+use log::{error};
 
 use crate::{FsActor, GetAttr, Lookup, Read, ReadDir, TTL};
 

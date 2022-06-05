@@ -3,8 +3,6 @@
     windows_subsystem = "windows"
 )]
 
-use std::path::PathBuf;
-
 use log::{debug, info};
 
 use tauri::api::cli::get_matches;
@@ -25,7 +23,7 @@ fn build_ui(shutdown_send: mpsc::UnboundedSender<()>) -> Result<App> {
 
     tauri::Builder::default()
         .system_tray(system_tray)
-        .on_system_tray_event(move |app, event| match event {
+        .on_system_tray_event(move |_app, event| match event {
             SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
                 "quit" => shutdown_send.send(()).unwrap(),
 
@@ -47,13 +45,13 @@ fn build_ui(shutdown_send: mpsc::UnboundedSender<()>) -> Result<App> {
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
+    let (shutdown_send, _shutdown_recv) = mpsc::unbounded_channel();
 
     let app = build_ui(shutdown_send)?;
 
-    app.run(|app_handle, e| match e {
+    app.run(|_app_handle, e| match e {
         tauri::RunEvent::Exit => info!("Exiting..."),
-        tauri::RunEvent::ExitRequested { api, .. } => info!("Exit requested..."),
+        tauri::RunEvent::ExitRequested { api: _, .. } => info!("Exit requested..."),
 
         _ => {}
     });

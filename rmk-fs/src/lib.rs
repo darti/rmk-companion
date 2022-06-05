@@ -1,5 +1,3 @@
-mod attr;
-mod datasource;
 mod fs;
 mod fs_actor;
 mod table;

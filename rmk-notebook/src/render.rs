@@ -52,7 +52,7 @@ impl Notebook {
 
             for layer in &page.layers {
                 for line in &layer.lines {
-                    self.render_line(line, &mut content.operations);
+                    self.render_line(line, &mut content.operations).unwrap();
                 }
             }
 
