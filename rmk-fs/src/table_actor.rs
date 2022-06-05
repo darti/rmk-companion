@@ -29,8 +29,14 @@ impl TableActor {
         let table = Arc::new(RmkTable::new(root));
 
         let static_files = [
-            RmkNode::new("root", "CollectionType", ".", None, 1, 1),
-            RmkNode::new("root", "CollectionType", "..", None, 1, 1),
+            RmkNode::new(".", "CollectionType", ".", None),
+            RmkNode::new(".", "CollectionType", "..", None),
+            // RmkNode::new(
+            //     ".VolumeIcon.icns",
+            //     "CollectionType",
+            //     ".VolumeIcon.icns",
+            //     None,
+            // ),
         ];
 
         let mut acc = (vec![], vec![], vec![], vec![], vec![], vec![]);

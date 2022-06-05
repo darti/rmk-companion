@@ -7,8 +7,6 @@ mod table_actor;
 
 pub mod errors;
 
-pub use fs::RmkFs;
-
 pub use table::RmkTable;
 
 pub use fs_actor::*;

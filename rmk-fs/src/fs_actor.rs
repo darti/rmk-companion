@@ -9,7 +9,7 @@ use arrow::array::UInt64Array;
 use fuser::BackgroundSession;
 use fuser::FileAttr;
 use fuser::FileType;
-use fuser::Filesystem;
+
 use fuser::MountOption;
 
 use log::error;
@@ -17,6 +17,7 @@ use log::info;
 
 use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
+use crate::fs::Fs;
 use crate::Query;
 use crate::TableActor;
 use itertools::izip;
@@ -148,9 +149,7 @@ impl Handler<Mount> for FsActor {
             MountOption::CUSTOM("iconpath=.VolumeIcon.icns".to_string()),
         ];
 
-        let fs = Fs {
-            table: ctx.address(),
-        };
+        let fs = Fs::new(ctx.address());
 
         self.session = Some(
             fuser::spawn_mount2(fs, self.mountpoint.clone(), options).map_err(|source| {
@@ -187,8 +186,8 @@ impl Handler<Umount> for FsActor {
 #[derive(Message)]
 #[rtype(result = "RmkFsResult<Vec<(u64, i64, FileType, String)>>")]
 pub struct ReadDir {
-    offset: usize,
-    ino: u64,
+    pub offset: usize,
+    pub ino: u64,
 }
 
 impl Handler<ReadDir> for FsActor {
@@ -254,7 +253,7 @@ impl Handler<ReadDir> for FsActor {
 #[derive(Message)]
 #[rtype(result = "RmkFsResult<Option<FileAttr>>")]
 pub struct GetAttr {
-    ino: u64,
+    pub ino: u64,
 }
 
 impl Handler<GetAttr> for FsActor {
@@ -273,8 +272,8 @@ impl Handler<GetAttr> for FsActor {
 #[derive(Message)]
 #[rtype(result = "RmkFsResult<Option<FileAttr>>")]
 pub struct Lookup {
-    name: String,
-    parent: u64,
+    pub name: String,
+    pub parent: u64,
 }
 
 impl Handler<Lookup> for FsActor {
@@ -287,98 +286,5 @@ impl Handler<Lookup> for FsActor {
             let condition = format!("parent_ino = {} and name = '{}'", msg.parent, msg.name);
             Ok(FsActor::search(table, &condition).await.unwrap().pop())
         })
-    }
-}
-
-struct Fs {
-    table: Addr<FsActor>,
-}
-
-impl Filesystem for Fs {
-    fn lookup(
-        &mut self,
-        _req: &fuser::Request<'_>,
-        parent: u64,
-        name: &std::ffi::OsStr,
-        reply: fuser::ReplyEntry,
-    ) {
-        let table = self.table.clone();
-
-        let sys = System::new();
-
-        let r = sys.block_on(async move {
-            table
-                .send(Lookup {
-                    name: name.to_string_lossy().into_owned(),
-                    parent,
-                })
-                .await
-        });
-
-        match r {
-            Ok(Ok(Some(attr))) => reply.entry(&TTL, &attr, 0),
-            Ok(Ok(None)) => reply.error(libc::ENOENT),
-            Ok(Err(err)) => {
-                error!("{:?}", err);
-                reply.error(libc::ENOENT)
-            }
-            Err(err) => {
-                error!("{:?}", err);
-                reply.error(libc::ENOENT)
-            }
-        }
-    }
-
-    fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
-        let table = self.table.clone();
-
-        let sys = System::new();
-
-        let r = sys.block_on(async move { table.send(GetAttr { ino }).await });
-
-        match r {
-            Ok(Ok(Some(attr))) => reply.attr(&TTL, &attr),
-            Ok(Ok(None)) => reply.error(libc::ENOENT),
-            Ok(Err(err)) => {
-                error!("{:?}", err);
-                reply.error(libc::ENOENT)
-            }
-            Err(err) => {
-                error!("{:?}", err);
-                reply.error(libc::ENOENT)
-            }
-        }
-    }
-
-    fn readdir(
-        &mut self,
-        _req: &fuser::Request<'_>,
-        ino: u64,
-        _fh: u64,
-        offset: i64,
-        mut reply: fuser::ReplyDirectory,
-    ) {
-        let table = self.table.clone();
-
-        let sys = System::new();
-
-        let r = sys.block_on(async {
-            table
-                .send(ReadDir {
-                    offset: offset as usize,
-                    ino,
-                })
-                .await
-                .unwrap()
-                .unwrap()
-        });
-
-        for (ino, i, typ, name) in r {
-            if reply.add(ino, i, typ, name) {
-                break;
-            }
-        }
-
-        reply.ok();
     }
 }

@@ -50,14 +50,26 @@ pub struct RmkNode<'a> {
 }
 
 impl<'a> RmkNode<'a> {
-    pub fn new(
-        id: &'a str,
-        typ: &'a str,
-        name: &'a str,
-        parent: Option<&'a str>,
-        ino: u64,
-        parent_ino: u64,
-    ) -> Self {
+    pub fn new(id: &'a str, typ: &'a str, name: &'a str, parent: Option<&'a str>) -> Self {
+        let ino = if id == "." {
+            1
+        } else {
+            let mut s = DefaultHasher::new();
+            id.hash(&mut s);
+            s.finish()
+        };
+
+        let parent_ino = {
+            let mut s = DefaultHasher::new();
+            match parent {
+                Some(p) => {
+                    p.hash(&mut s);
+                    s.finish()
+                }
+                None => 1,
+            }
+        };
+
         Self {
             id,
             typ,
