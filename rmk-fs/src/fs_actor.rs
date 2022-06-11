@@ -155,9 +155,7 @@ impl Handler<Mount> for FsActor {
             MountOption::AllowOther,
             MountOption::FSName("remarkable".to_string()),
             MountOption::RO,
-            MountOption::CUSTOM("modules=volname:volicon".to_string()),
             MountOption::CUSTOM("volname=Remarkable".to_string()),
-            MountOption::CUSTOM("iconpath=.VolumeIcon.icns".to_string()),
         ];
 
         let fs = Fs::new(ctx.address());

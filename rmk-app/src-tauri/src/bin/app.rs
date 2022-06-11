@@ -5,11 +5,21 @@
 
 use log::{debug, info};
 
+use rmk_app::shutdown::shutdown_manager;
 use tauri::api::cli::get_matches;
-use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
+use tauri::{
+    App, CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
+};
 use tokio::sync::mpsc;
 
-use anyhow::{Context, Result};
+use std::path::PathBuf;
+
+use actix::prelude::*;
+use anyhow::Result;
+
+use rmk_fs::{FsActor, Mount, Scan, TableActor, Umount};
+
+use anyhow::Context;
 
 fn build_ui(shutdown_send: mpsc::UnboundedSender<()>) -> Result<App> {
     let options = CustomMenuItem::new("options".to_string(), "Options");
@@ -41,7 +51,7 @@ fn build_ui(shutdown_send: mpsc::UnboundedSender<()>) -> Result<App> {
         .context("error while running tauri application")
 }
 
-#[tokio::main]
+#[actix::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
@@ -49,12 +59,34 @@ async fn main() -> Result<()> {
 
     let app = build_ui(shutdown_send)?;
 
+    let root = PathBuf::from("../dump/xochitl");
+    let mountpoint = PathBuf::from("../mnt");
+
+    let file_watcher = TableActor::try_new(&root)?.start();
+    file_watcher.send(Scan).await??;
+
+    let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
+
+    fs_mounter.send(Mount).await??;
+
+    let handle = app.app_handle();
+
     app.run(|_app_handle, e| match e {
         tauri::RunEvent::Exit => info!("Exiting..."),
         tauri::RunEvent::ExitRequested { api: _, .. } => info!("Exit requested..."),
 
         _ => {}
     });
+
+    info!("Narf");
+
+    shutdown_manager(async {
+        fs_mounter.send(Umount).await.unwrap().unwrap();
+        handle.exit(0);
+    })
+    .await;
+
+    info!("Exiting...");
 
     Ok(())
 }

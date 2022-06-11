@@ -288,7 +288,7 @@ impl ExecutionPlan for FsExecPlan {
                     2 => arrays[i]
                         .as_any_mut()
                         .downcast_mut::<StringBuilder>()
-                        .map(|a| a.append_value(&metadata.visible_name)),
+                        .map(|a| a.append_value(&format!("{}.pdf", metadata.visible_name))),
 
                     3 => {
                         if let Some(parent) = &metadata.parent {
