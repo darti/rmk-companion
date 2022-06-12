@@ -14,6 +14,9 @@ use crate::{
     Result,
 };
 
+pub const DOCUMENT_TYPE: &str = "DocumentType";
+pub const COLLECTION_TYPE: &str = "CollectionType";
+
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

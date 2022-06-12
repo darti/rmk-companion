@@ -8,9 +8,7 @@ mod rm;
 
 pub use errors::*;
 use notebook::read_metadata_with_id;
-pub use notebook::{
-    read_content_with_id, read_metadata, read_pagedata_with_id, read_rm, Content, Metadata,
-};
+pub use notebook::*;
 use rm::Page;
 
 pub struct Notebook {

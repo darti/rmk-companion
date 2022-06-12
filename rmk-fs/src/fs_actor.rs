@@ -16,10 +16,13 @@ use fuser::MountOption;
 
 use log::error;
 use log::info;
+use rmk_notebook::COLLECTION_TYPE;
+use rmk_notebook::DOCUMENT_TYPE;
 
 use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
 use crate::fs::Fs;
+use crate::NotebookActor;
 use crate::Query;
 use crate::TableActor;
 use itertools::izip;
@@ -33,11 +36,11 @@ pub struct FsActor {
 }
 
 impl FsActor {
-    pub fn new(mountpoint: &PathBuf, addr: Addr<TableActor>) -> Self {
+    pub fn new(mountpoint: &PathBuf, table_addr: Addr<TableActor>) -> Self {
         Self {
             mountpoint: mountpoint.clone(),
             session: None,
-            table: addr,
+            table: table_addr,
         }
     }
 
@@ -81,7 +84,7 @@ impl FsActor {
             for (ino, typ, size) in izip!(inos, types, sizes) {
                 if let (Some(ino), Some(typ), Some(size)) = (ino, typ, size) {
                     match typ {
-                        "DocumentType" => {
+                        DOCUMENT_TYPE => {
                             let blksize = 512;
                             let blocks = (size + blksize - 1) / blksize;
 
@@ -104,7 +107,7 @@ impl FsActor {
                             });
                         }
 
-                        "CollectionType" => {
+                        COLLECTION_TYPE => {
                             attrs.push(FileAttr {
                                 ino,
                                 size: 0,

@@ -21,3 +21,4 @@ rmk-notebook = { path = "../rmk-notebook" }
 actix = "0.13"
 uuid = { version = "1", features = ["v4", "serde"] }
 itertools = "0.10"
+once_cell = "1"

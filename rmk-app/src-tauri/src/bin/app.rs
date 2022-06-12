@@ -59,17 +59,17 @@ async fn main() -> Result<()> {
 
     let app = build_ui(shutdown_send)?;
 
-    let root = PathBuf::from("../dump/xochitl");
-    let mountpoint = PathBuf::from("../mnt");
+    // let root = PathBuf::from("../dump/xochitl");
+    // let mountpoint = PathBuf::from("../mnt");
 
-    let file_watcher = TableActor::try_new(&root)?.start();
-    file_watcher.send(Scan).await??;
+    // let file_watcher = TableActor::try_new(&root)?.start();
+    // file_watcher.send(Scan).await??;
 
-    let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
+    // let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
 
-    fs_mounter.send(Mount).await??;
+    // fs_mounter.send(Mount).await??;
 
-    let handle = app.app_handle();
+    // let handle = app.app_handle();
 
     app.run(|_app_handle, e| match e {
         tauri::RunEvent::Exit => info!("Exiting..."),
@@ -80,11 +80,11 @@ async fn main() -> Result<()> {
 
     info!("Narf");
 
-    shutdown_manager(async {
-        fs_mounter.send(Umount).await.unwrap().unwrap();
-        handle.exit(0);
-    })
-    .await;
+    // shutdown_manager(async {
+    //     fs_mounter.send(Umount).await.unwrap().unwrap();
+    //     handle.exit(0);
+    // })
+    // .await;
 
     info!("Exiting...");
 

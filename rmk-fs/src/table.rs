@@ -28,7 +28,10 @@ use log::{debug, info};
 use rmk_notebook::{read_metadata, Metadata, DOCUMENT_TYPE};
 use std::hash::Hasher;
 
-use crate::errors::{RmkFsError, RmkFsResult};
+use crate::{
+    errors::{RmkFsError, RmkFsResult},
+    SCHEMAS,
+};
 
 struct RmkTableInner {
     data: HashMap<String, Metadata>,
@@ -76,7 +79,6 @@ impl Debug for RmkTableInner {
 
 #[derive(Clone, Debug)]
 pub struct RmkTable {
-    schema: SchemaRef,
     inner: Arc<RwLock<RmkTableInner>>,
 }
 
@@ -89,7 +91,6 @@ impl Display for RmkTable {
 impl RmkTable {
     pub fn new(root: &PathBuf) -> Self {
         Self {
-            schema: schema(),
             inner: Arc::new(RwLock::new(RmkTableInner::new(root.clone()))),
         }
     }
@@ -99,7 +100,7 @@ impl RmkTable {
     }
 
     pub fn schema(&self) -> SchemaRef {
-        self.schema.clone()
+        SCHEMAS.metadata()
     }
 }
 
@@ -114,7 +115,7 @@ impl TableProvider for RmkTable {
     }
 
     fn schema(&self) -> SchemaRef {
-        self.schema.clone()
+        SCHEMAS.metadata()
     }
 
     async fn scan(
