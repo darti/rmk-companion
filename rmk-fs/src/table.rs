@@ -8,7 +8,8 @@ use datafusion::{
     datasource::TableProvider,
     error::DataFusionError,
     execution::context::TaskContext,
-    logical_expr::TableType,
+    logical_expr::{TableProviderFilterPushDown, TableType},
+    logical_plan::Expr,
     physical_plan::{
         memory::MemoryStream, project_schema, ExecutionPlan, SendableRecordBatchStream,
     },
@@ -24,70 +25,10 @@ use std::{
 };
 
 use log::{debug, info};
-use rmk_notebook::{read_metadata, Metadata};
+use rmk_notebook::{read_metadata, Metadata, DOCUMENT_TYPE};
 use std::hash::Hasher;
 
 use crate::errors::{RmkFsError, RmkFsResult};
-
-pub fn schema() -> SchemaRef {
-    SchemaRef::new(Schema::new(vec![
-        Field::new("id", DataType::Utf8, false),
-        Field::new("type", DataType::Utf8, false),
-        Field::new("name", DataType::Utf8, false),
-        Field::new("parent", DataType::Utf8, true),
-        Field::new("ino", DataType::UInt64, false),
-        Field::new("parent_ino", DataType::UInt64, false),
-    ]))
-}
-
-pub struct RmkNode<'a> {
-    pub id: &'a str,
-    pub typ: &'a str,
-    pub name: &'a str,
-    pub parent: Option<&'a str>,
-    pub ino: u64,
-    pub parent_ino: u64,
-    pub content: Option<&'a [u8]>,
-}
-
-impl<'a> RmkNode<'a> {
-    pub fn new(
-        id: &'a str,
-        typ: &'a str,
-        name: &'a str,
-        parent: Option<&'a str>,
-        content: Option<&'a [u8]>,
-    ) -> Self {
-        let ino = if id == "." {
-            1
-        } else {
-            let mut s = DefaultHasher::new();
-            id.hash(&mut s);
-            s.finish()
-        };
-
-        let parent_ino = {
-            let mut s = DefaultHasher::new();
-            match parent {
-                Some(p) => {
-                    p.hash(&mut s);
-                    s.finish()
-                }
-                None => 1,
-            }
-        };
-
-        Self {
-            id,
-            typ,
-            name,
-            parent,
-            ino,
-            parent_ino,
-            content,
-        }
-    }
-}
 
 struct RmkTableInner {
     data: HashMap<String, Metadata>,
@@ -186,6 +127,13 @@ impl TableProvider for RmkTable {
             self.clone(),
             projection.clone(),
         )?))
+    }
+
+    fn supports_filter_pushdown(
+        &self,
+        _filter: &Expr,
+    ) -> Result<TableProviderFilterPushDown, DataFusionError> {
+        Ok(TableProviderFilterPushDown::Exact)
     }
 }
 
@@ -288,7 +236,13 @@ impl ExecutionPlan for FsExecPlan {
                     2 => arrays[i]
                         .as_any_mut()
                         .downcast_mut::<StringBuilder>()
-                        .map(|a| a.append_value(&format!("{}.pdf", metadata.visible_name))),
+                        .map(|a| {
+                            if metadata.typ == DOCUMENT_TYPE {
+                                a.append_value(&format!("{}.pdf", metadata.visible_name))
+                            } else {
+                                a.append_value(&metadata.visible_name)
+                            }
+                        }),
 
                     3 => {
                         if let Some(parent) = &metadata.parent {
