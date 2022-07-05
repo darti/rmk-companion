@@ -297,6 +297,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4154,12 +4164,13 @@ dependencies = [
 
 [[package]]
 name = "tauri-build"
-version = "1.0.0-rc.9"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae2a4dfb8e5d8a5a4325fda01e9ddf327db23115dce0f54a4a3f9e8f74341f28"
+checksum = "598bd36884ee15ac73dfca9921066fd87d13d9beea60384b99a66c3a5d800d70"
 dependencies = [
  "anyhow",
  "cargo_toml",
+ "heck 0.4.0",
  "semver 1.0.9",
  "serde_json",
  "tauri-utils",

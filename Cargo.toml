@@ -1,5 +1,10 @@
 [workspace]
-members = ["rmk-fs", "rmk-notebook", "rmk-app/src-tauri"]
+members = [
+    "rmk-fs",
+    "rmk-notebook",
+    "rmk-app/src-tauri",
+    "rmk-companion/src-tauri",
+]
 
 # [profile.release]
 # lto = true
