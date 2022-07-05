@@ -1,6 +1,6 @@
 use arrow::{
     array::{ArrayBuilder, StringBuilder, UInt64Builder},
-    datatypes::{DataType, Field, Schema, SchemaRef},
+    datatypes::SchemaRef,
     record_batch::RecordBatch,
 };
 use async_trait::async_trait;
@@ -121,7 +121,7 @@ impl TableProvider for RmkTable {
     async fn scan(
         &self,
         projection: &Option<Vec<usize>>,
-        _filters: &[datafusion::logical_plan::Expr],
+        filters: &[datafusion::logical_plan::Expr],
         _limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         Ok(Arc::new(FsExecPlan::try_new(

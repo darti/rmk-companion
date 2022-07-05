@@ -21,7 +21,7 @@ impl Schemas {
                 Field::new("parent_ino", DataType::UInt64, false),
             ])),
             content_schema: SchemaRef::new(Schema::new(vec![
-                Field::new("ino", DataType::UInt64, false),
+                Field::new("id", DataType::Utf8, false),
                 Field::new("size", DataType::UInt64, false),
                 Field::new("content", DataType::Binary, true),
             ])),

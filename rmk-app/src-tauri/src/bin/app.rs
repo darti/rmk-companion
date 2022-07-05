@@ -5,19 +5,11 @@
 
 use log::{debug, info};
 
-use rmk_app::shutdown::shutdown_manager;
 use tauri::api::cli::get_matches;
-use tauri::{
-    App, CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
-};
+use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
 use tokio::sync::mpsc;
 
-use std::path::PathBuf;
-
-use actix::prelude::*;
 use anyhow::Result;
-
-use rmk_fs::{FsActor, Mount, Scan, TableActor, Umount};
 
 use anyhow::Context;
 

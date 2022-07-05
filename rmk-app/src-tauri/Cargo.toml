@@ -35,6 +35,8 @@ rmk-fs = { path = "../../rmk-fs" }
 anyhow = "1"
 actix-rt = "2.7"
 actix = "0.13"
+actix-web-actors = "4"
+actix-web = "4"
 
 [features]
 # by default Tauri runs in production mode

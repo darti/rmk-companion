@@ -119,7 +119,7 @@ pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>
         metadata.4.push(node.ino);
         metadata.5.push(node.parent_ino);
 
-        content.0.push(node.ino);
+        content.0.push(node.id);
         content.1.push(node.content.map_or(0, |c| c.len() as u64));
         content.2.push(node.content);
     }
@@ -144,7 +144,7 @@ pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>
         vec![vec![RecordBatch::try_new(
             SCHEMAS.content(),
             vec![
-                Arc::new(UInt64Array::from(content.0)),
+                Arc::new(StringArray::from(content.0)),
                 Arc::new(UInt64Array::from(content.1)),
                 Arc::new(BinaryArray::from(content.2)),
             ],

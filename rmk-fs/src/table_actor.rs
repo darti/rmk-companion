@@ -40,8 +40,7 @@ impl TableActor {
         fs.context
             .register_table("metadata_static", metadata_static)?;
 
-        fs.context
-            .register_table("content_static", content_static)?;
+        fs.context.register_table("content", content_static)?;
 
         let union = fs
             .context

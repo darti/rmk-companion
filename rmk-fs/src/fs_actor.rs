@@ -22,7 +22,7 @@ use rmk_notebook::DOCUMENT_TYPE;
 use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
 use crate::fs::Fs;
-use crate::NotebookActor;
+
 use crate::Query;
 use crate::TableActor;
 use itertools::izip;
@@ -46,7 +46,7 @@ impl FsActor {
 
     async fn search(table: Addr<TableActor>, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
         let query = format!(
-            "select distinct ino, type, size from metadata left join content_static on metadata.ino = content_static.ino where {}",
+            "select distinct ino, type, size from metadata left join content on metadata.id = content.id where {}",
             condition
         );
 
@@ -58,6 +58,7 @@ impl FsActor {
             Err(err) => return Err(RmkFsError::ActorError(err)),
         };
 
+        batches.show().await.unwrap();
         let batches = batches.collect().await.unwrap();
 
         let mut attrs = Vec::new();
@@ -314,7 +315,15 @@ impl Handler<Read> for FsActor {
         let table = self.table.clone();
 
         Box::pin(async move {
-            let query = format!("select content from content_static where ino = {}", msg.ino);
+            let query = format!(
+                r#"
+            SELECT 
+                content.content 
+            FROM metadata 
+            JOIN content ON metadata.id = content.id 
+            WHERE metadata.ino = {}"#,
+                msg.ino
+            );
 
             let batches = table.send(Query::new(&query)).await.unwrap().unwrap();
 
