@@ -19,12 +19,13 @@ use std::{
     any::Any,
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::{Debug, Display},
+    fs,
     hash::Hash,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
 
-use log::{debug, info};
+use log::{debug, info, warn};
 use rmk_notebook::{read_metadata, Metadata, DOCUMENT_TYPE};
 use std::hash::Hasher;
 
@@ -47,7 +48,16 @@ impl RmkTableInner {
     }
 
     fn scan(&mut self) -> RmkFsResult<()> {
-        info!("Scanning filesystem at {}", self.root.display());
+        match std::fs::canonicalize(&self.root) {
+            Ok(_) => info!("Scanning filesystem at {}", self.root.display()),
+            Err(_) => {
+                warn!("Invalid scan path: {}", self.root.display());
+                return Err(RmkFsError::ScanError {
+                    root: self.root.clone(),
+                });
+            }
+        };
+
         let pattern = self.root.join("*.metadata");
 
         let pattern = pattern.to_str().ok_or_else(|| RmkFsError::ScanError {

@@ -3,10 +3,26 @@
     windows_subsystem = "windows"
 )]
 
+mod shutdown;
+
+use std::fs;
+use std::path::PathBuf;
+use std::thread;
+
+use actix::prelude::*;
+use actix::SyncArbiter;
 use anyhow::Context;
 use anyhow::Result;
 use log::info;
+use rmk_fs::FsActor;
+use rmk_fs::Mount;
+use rmk_fs::NotebookActor;
+use rmk_fs::Scan;
+use rmk_fs::TableActor;
+use rmk_fs::Umount;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
+
+use crate::shutdown::shutdown_manager;
 
 fn build_ui() -> Result<App> {
     let context = tauri::generate_context!();
@@ -42,10 +58,39 @@ fn build_ui() -> Result<App> {
 fn main() -> Result<()> {
     pretty_env_logger::init();
 
+    thread::Builder::new()
+        .name("Device Handler".into())
+        .spawn(|| {
+            actix::System::new()
+                .block_on(async move {
+                    let root = PathBuf::from("../dump/xochitl");
+                    let mountpoint = PathBuf::from("../mnt");
+
+                    let notebook_renderer = SyncArbiter::start(4, || NotebookActor::new());
+
+                    let file_watcher = TableActor::try_new(&root, notebook_renderer)?.start();
+                    file_watcher.send(Scan).await??;
+
+                    let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
+
+                    // fs_mounter.send(Mount).await??;
+
+                    shutdown_manager(async {
+                        fs_mounter.send(Umount).await.unwrap().unwrap();
+                    })
+                    .await;
+
+                    info!("Exiting...");
+
+                    Ok::<(), anyhow::Error>(())
+                })
+                .unwrap();
+        })?;
+
     let app = build_ui()?;
 
     app.run(|_app_handle, e| match e {
-        tauri::RunEvent::Exit => info!("Exiting..."),
+        tauri::RunEvent::Exit => info!("Exiting gui..."),
         tauri::RunEvent::ExitRequested { api: _, .. } => info!("Exit requested..."),
 
         _ => {}
