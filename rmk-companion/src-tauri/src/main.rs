@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod settings;
 mod shutdown;
 
 use std::fs;
@@ -22,6 +23,7 @@ use rmk_fs::TableActor;
 use rmk_fs::Umount;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
 
+use crate::settings::SETTINGS;
 use crate::shutdown::shutdown_manager;
 
 fn build_ui() -> Result<App> {
@@ -63,15 +65,14 @@ fn main() -> Result<()> {
         .spawn(|| {
             actix::System::new()
                 .block_on(async move {
-                    let root = PathBuf::from("../dump/xochitl");
-                    let mountpoint = PathBuf::from("../mnt");
-
                     let notebook_renderer = SyncArbiter::start(4, || NotebookActor::new());
 
-                    let file_watcher = TableActor::try_new(&root, notebook_renderer)?.start();
+                    let file_watcher =
+                        TableActor::try_new(&SETTINGS.cache_root(), notebook_renderer)?.start();
                     file_watcher.send(Scan).await??;
 
-                    let fs_mounter = FsActor::new(&mountpoint, file_watcher.clone()).start();
+                    let fs_mounter =
+                        FsActor::new(&SETTINGS.mount_point(), file_watcher.clone()).start();
 
                     // fs_mounter.send(Mount).await??;
 
