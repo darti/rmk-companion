@@ -1,13 +1,9 @@
 <script lang="ts">
-  import 'papercss/dist/paper.min.css';
-
   import Editor from './lib/Editor.svelte';
 </script>
 
-<main class="flex-spaces  row">
-  <div class="col col-4">
-    <Editor />
-  </div>
+<main class="flex flex-col">
+  <Editor />
 </main>
 
 <style>

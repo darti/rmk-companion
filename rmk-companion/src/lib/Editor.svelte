@@ -14,8 +14,4 @@
   });
 </script>
 
-<div
-  class="monaco-container"
-  bind:this={container}
-  style="height: 100%;  widht:100%; text-align: left"
-/>
+<div class="h-full text-left w-full monaco-container" bind:this={container} />
