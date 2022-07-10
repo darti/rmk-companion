@@ -6,8 +6,6 @@
 mod settings;
 mod shutdown;
 
-use std::fs;
-use std::path::PathBuf;
 use std::thread;
 
 use actix::prelude::*;
@@ -16,7 +14,7 @@ use anyhow::Context;
 use anyhow::Result;
 use log::info;
 use rmk_fs::FsActor;
-use rmk_fs::Mount;
+
 use rmk_fs::NotebookActor;
 use rmk_fs::Scan;
 use rmk_fs::TableActor;

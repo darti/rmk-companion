@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use datafusion::{
     datasource::TableProvider,
     error::DataFusionError,
-    execution::context::TaskContext,
+    execution::context::{SessionState, TaskContext},
     logical_expr::{TableProviderFilterPushDown, TableType},
     logical_plan::Expr,
     physical_plan::{
@@ -130,8 +130,9 @@ impl TableProvider for RmkTable {
 
     async fn scan(
         &self,
+        _ctx: &SessionState,
         projection: &Option<Vec<usize>>,
-        filters: &[datafusion::logical_plan::Expr],
+        _filters: &[datafusion::logical_plan::Expr],
         _limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         Ok(Arc::new(FsExecPlan::try_new(
