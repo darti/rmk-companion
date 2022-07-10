@@ -1,9 +1,15 @@
 <script lang="ts">
   import Editor from './lib/Editor.svelte';
+  import { invoke } from '@tauri-apps/api/tauri';
+
+  function query() {
+    invoke('run_query', { query: 'Hello!' });
+  }
 </script>
 
 <main class="flex flex-col">
   <Editor />
+  <button on:click={query}>Run</button>
 </main>
 
 <style>
@@ -13,8 +19,7 @@
   }
 
   main {
-    text-align: center;
-    padding: 1em;
+    padding: 0;
     margin: 0;
 
     height: 100vh;
