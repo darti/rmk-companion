@@ -28,6 +28,9 @@ pub enum RmkFsError {
 
     #[error("unknown file type: {0}")]
     UnknownFileType(String),
+
+    #[error("failed to start daemon")]
+    DaemonError,
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;

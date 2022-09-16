@@ -1,9 +1,6 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
-use config::{Config, ConfigError, Environment, File};
+use config::{Config, Environment, File};
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, info};
