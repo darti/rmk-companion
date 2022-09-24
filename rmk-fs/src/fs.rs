@@ -1,7 +1,7 @@
 use actix::{Addr, System};
-use datafusion::parquet::data_type::AsBytes;
+
 use fuser::{Filesystem, ReplyData, Request};
-use log::{error};
+use log::error;
 
 use crate::{FsActor, GetAttr, Lookup, Read, ReadDir, TTL};
 
@@ -131,7 +131,7 @@ impl Filesystem for Fs {
                 let from = offset as usize;
                 let to = from + size as usize;
 
-                reply.data(&content[from..to].as_bytes())
+                reply.data(content[from..to].into())
             }
             None => reply.error(libc::ENOENT),
         };

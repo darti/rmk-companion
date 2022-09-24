@@ -4,50 +4,28 @@ use std::sync::Arc;
 use actix::prelude::*;
 use actix::Actor;
 
-use datafusion::dataframe::DataFrame;
-
-use datafusion::error::DataFusionError;
-
-use datafusion::prelude::SessionContext;
 use log::debug;
 use log::info;
+use polars::prelude::DataFrame;
+use polars::prelude::PolarsError;
 
-use crate::create_static;
 use crate::errors::RmkFsResult;
 use crate::NotebookActor;
 use crate::RmkTable;
 
 pub struct TableActor {
     table: Arc<RmkTable>,
-    context: SessionContext,
     renderer: Addr<NotebookActor>,
 }
 
 impl TableActor {
-    pub fn try_new(root: &PathBuf, renderer: Addr<NotebookActor>) -> Result<Self, DataFusionError> {
-        let context = SessionContext::new();
-        let table = Arc::new(RmkTable::new(root));
+    pub fn try_new(root: &PathBuf, renderer: Addr<NotebookActor>) -> RmkFsResult<Self> {
+        let table = Arc::new(RmkTable::new(root)?);
 
         let fs = Self {
             table: table.clone(),
-            context,
             renderer,
         };
-
-        let (metadata_static, content_static) = create_static()?;
-
-        fs.context.register_table("metadata_dynamic", table)?;
-        fs.context
-            .register_table("metadata_static", metadata_static)?;
-
-        fs.context.register_table("content", content_static)?;
-
-        let union = fs
-            .context
-            .table("metadata_dynamic")?
-            .union(fs.context.table("metadata_static")?)?;
-
-        fs.context.register_table("metadata", union)?;
 
         Ok(fs)
     }
@@ -72,7 +50,7 @@ impl Handler<Scan> for TableActor {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<Arc<DataFrame>, DataFusionError>")]
+#[rtype(result = "RmkFsResult<Arc<DataFrame>>")]
 pub struct Query(String);
 
 impl Query {
@@ -82,19 +60,19 @@ impl Query {
 }
 
 impl Handler<Query> for TableActor {
-    type Result = AtomicResponse<Self, Result<Arc<DataFrame>, DataFusionError>>;
+    type Result = AtomicResponse<Self, RmkFsResult<Arc<DataFrame>>>;
 
     fn handle(&mut self, msg: Query, _ctx: &mut Self::Context) -> Self::Result {
-        let context = self.context.clone();
-
         let query = msg.0.clone();
 
         debug!("Executing query: {}", query);
 
-        AtomicResponse::new(Box::pin(
-            async move { context.sql(&query).await }
-                .into_actor(self)
-                .map(|out, _this, _| out),
-        ))
+        // AtomicResponse::new(Box::pin(
+        //     async move { context.sql(&query).await }
+        //         .into_actor(self)
+        //         .map(|out, _this, _| out),
+        // ))
+
+        todo!()
     }
 }

@@ -16,7 +16,7 @@ pub enum RmkFsError {
     #[error(transparent)]
     NotebookError(#[from] rmk_notebook::Error),
     #[error(transparent)]
-    DataFusionError(#[from] datafusion::error::DataFusionError),
+    PolarError(#[from] polars::error::PolarsError),
     #[error(transparent)]
     ActorError(#[from] actix::MailboxError),
 

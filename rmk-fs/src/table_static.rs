@@ -1,13 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 
-use arrow::array::{BinaryArray, StringArray, UInt64Array};
-use arrow::record_batch::RecordBatch;
-use datafusion::common::DataFusionError;
-use datafusion::datasource::{MemTable, TableProvider};
-
-use crate::SCHEMAS;
+use polars::prelude::*;
 
 pub struct RmkNode<'a> {
     pub id: &'a str,
@@ -58,8 +52,7 @@ impl<'a> RmkNode<'a> {
     }
 }
 
-pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>), DataFusionError>
-{
+pub fn create_static() -> Result<(DataFrame, DataFrame)> {
     let static_files = [
         RmkNode::new(".", "CollectionType", ".", None, None),
         RmkNode::new(".", "CollectionType", "..", None, None),
@@ -97,59 +90,42 @@ pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>
 
     let n = static_files.len();
 
-    let mut metadata = (
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-    );
-    let mut content = (
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-        Vec::with_capacity(n),
-    );
+    let mut ids = Vec::with_capacity(n);
+    let mut types = Vec::with_capacity(n);
+    let mut names = Vec::with_capacity(n);
+    let mut parents = Vec::with_capacity(n);
+    let mut inos = Vec::with_capacity(n);
+    let mut parent_inos = Vec::with_capacity(n);
+
+    let mut sizes = Vec::with_capacity(n);
+    let mut contents = Vec::with_capacity(n);
 
     for node in static_files.iter() {
-        metadata.0.push(node.id);
-        metadata.1.push(node.typ);
-        metadata.2.push(node.name);
-        metadata.3.push(node.parent);
-        metadata.4.push(node.ino);
-        metadata.5.push(node.parent_ino);
+        ids.push(node.id);
+        types.push(node.typ);
+        names.push(node.name);
+        parents.push(node.parent);
+        inos.push(node.ino);
+        parent_inos.push(node.parent_ino);
 
-        content.0.push(node.id);
-        content.1.push(node.content.map_or(0, |c| c.len() as u64));
-        content.2.push(node.content);
+        sizes.push(node.content.map_or(0, |c| c.len() as u64));
+        contents.push(node.content);
     }
 
-    let metadata_provider = Arc::new(MemTable::try_new(
-        SCHEMAS.metadata(),
-        vec![vec![RecordBatch::try_new(
-            SCHEMAS.metadata(),
-            vec![
-                Arc::new(StringArray::from(metadata.0)),
-                Arc::new(StringArray::from(metadata.1)),
-                Arc::new(StringArray::from(metadata.2)),
-                Arc::new(StringArray::from(metadata.3)),
-                Arc::new(UInt64Array::from(metadata.4)),
-                Arc::new(UInt64Array::from(metadata.5)),
-            ],
-        )?]],
-    )?);
+    let metadata_df = df![
+        "id" => ids.clone(),
+        "type" => types,
+        "name" => names,
+        "parent" => parents,
+        "ino" => inos,
+        "parent_ino" => parent_inos
+    ]?;
 
-    let content_provider = Arc::new(MemTable::try_new(
-        SCHEMAS.content(),
-        vec![vec![RecordBatch::try_new(
-            SCHEMAS.content(),
-            vec![
-                Arc::new(StringArray::from(content.0)),
-                Arc::new(UInt64Array::from(content.1)),
-                Arc::new(BinaryArray::from(content.2)),
-            ],
-        )?]],
-    )?);
+    let content_df = df![
+        "id" => ids,
+        "size" => sizes,
+        // "content" => content
+    ]?;
 
-    Ok((metadata_provider, content_provider))
+    Ok((metadata_df, content_df))
 }

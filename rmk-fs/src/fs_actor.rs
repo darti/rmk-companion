@@ -1,23 +1,16 @@
 use std::path::PathBuf;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
 use actix::prelude::*;
 use actix::Actor;
-use arrow::array::Array;
-use arrow::array::BinaryArray;
-use arrow::array::StringArray;
-use arrow::array::UInt64Array;
+
 use fuser::BackgroundSession;
 use fuser::FileAttr;
 use fuser::FileType;
 
 use fuser::MountOption;
 
-use log::error;
 use log::info;
-use rmk_notebook::COLLECTION_TYPE;
-use rmk_notebook::DOCUMENT_TYPE;
 
 use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
@@ -25,7 +18,6 @@ use crate::fs::Fs;
 
 use crate::Query;
 use crate::TableActor;
-use itertools::izip;
 
 pub const TTL: Duration = Duration::from_secs(1); // 1 second
 
@@ -50,91 +42,88 @@ impl FsActor {
             condition
         );
 
-        let batch = table.send(Query::new(&query)).await;
+        let df = table.send(Query::new(&query)).await;
 
-        let batches = match batch {
-            Ok(Ok(batch)) => batch,
-            Ok(Err(err)) => return Err(RmkFsError::DataFusionError(err)),
+        let result = match df {
+            Ok(Ok(r)) => r,
+            Ok(Err(err)) => return Err(err),
             Err(err) => return Err(RmkFsError::ActorError(err)),
         };
 
-        batches.show().await.unwrap();
-        let batches = batches.collect().await.unwrap();
-
         let mut attrs = Vec::new();
 
-        for batch in batches {
-            let inos = batch
-                .column(0)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .unwrap();
+        // for batch in batches {
+        //     let inos = batch
+        //         .column(0)
+        //         .as_any()
+        //         .downcast_ref::<UInt64Array>()
+        //         .unwrap();
 
-            let types = batch
-                .column(1)
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .unwrap();
+        //     let types = batch
+        //         .column(1)
+        //         .as_any()
+        //         .downcast_ref::<StringArray>()
+        //         .unwrap();
 
-            let sizes = batch
-                .column(2)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .unwrap();
+        //     let sizes = batch
+        //         .column(2)
+        //         .as_any()
+        //         .downcast_ref::<UInt64Array>()
+        //         .unwrap();
 
-            for (ino, typ, size) in izip!(inos, types, sizes) {
-                if let (Some(ino), Some(typ), Some(size)) = (ino, typ, size) {
-                    match typ {
-                        DOCUMENT_TYPE => {
-                            let blksize = 512;
-                            let blocks = (size + blksize - 1) / blksize;
+        //     for (ino, typ, size) in izip!(inos, types, sizes) {
+        //         if let (Some(ino), Some(typ), Some(size)) = (ino, typ, size) {
+        //             match typ {
+        //                 DOCUMENT_TYPE => {
+        //                     let blksize = 512;
+        //                     let blocks = (size + blksize - 1) / blksize;
 
-                            attrs.push(FileAttr {
-                                ino,
-                                size,
-                                blocks,
-                                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                                mtime: UNIX_EPOCH,
-                                ctime: UNIX_EPOCH,
-                                crtime: UNIX_EPOCH,
-                                kind: FileType::RegularFile,
-                                perm: 0o755,
-                                nlink: 2,
-                                uid: 501,
-                                gid: 20,
-                                rdev: 0,
-                                flags: 0,
-                                blksize: blksize as u32,
-                            });
-                        }
+        //                     attrs.push(FileAttr {
+        //                         ino,
+        //                         size,
+        //                         blocks,
+        //                         atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+        //                         mtime: UNIX_EPOCH,
+        //                         ctime: UNIX_EPOCH,
+        //                         crtime: UNIX_EPOCH,
+        //                         kind: FileType::RegularFile,
+        //                         perm: 0o755,
+        //                         nlink: 2,
+        //                         uid: 501,
+        //                         gid: 20,
+        //                         rdev: 0,
+        //                         flags: 0,
+        //                         blksize: blksize as u32,
+        //                     });
+        //                 }
 
-                        COLLECTION_TYPE => {
-                            attrs.push(FileAttr {
-                                ino,
-                                size: 0,
-                                blocks: 0,
-                                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                                mtime: UNIX_EPOCH,
-                                ctime: UNIX_EPOCH,
-                                crtime: UNIX_EPOCH,
-                                kind: FileType::Directory,
-                                perm: 0o755,
-                                nlink: 2,
-                                uid: 501,
-                                gid: 20,
-                                rdev: 0,
-                                flags: 0,
-                                blksize: 512,
-                            });
-                        }
+        //                 COLLECTION_TYPE => {
+        //                     attrs.push(FileAttr {
+        //                         ino,
+        //                         size: 0,
+        //                         blocks: 0,
+        //                         atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+        //                         mtime: UNIX_EPOCH,
+        //                         ctime: UNIX_EPOCH,
+        //                         crtime: UNIX_EPOCH,
+        //                         kind: FileType::Directory,
+        //                         perm: 0o755,
+        //                         nlink: 2,
+        //                         uid: 501,
+        //                         gid: 20,
+        //                         rdev: 0,
+        //                         flags: 0,
+        //                         blksize: 512,
+        //                     });
+        //                 }
 
-                        t => {
-                            error!("Unknown type: {}", t);
-                        }
-                    };
-                }
-            }
-        }
+        //                 t => {
+        //                     error!("Unknown type: {}", t);
+        //                 }
+        //             };
+        //         }
+        //     }
+        // }
 
         Ok(attrs)
     }
@@ -219,42 +208,40 @@ impl Handler<ReadDir> for FsActor {
                 .unwrap()
                 .unwrap();
 
-            let batches = batches.collect().await.unwrap();
-
             let mut dirs = Vec::new();
 
-            for batch in batches {
-                let inos = batch
-                    .column(0)
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
-                    .unwrap();
+            // for batch in batches {
+            //     let inos = batch
+            //         .column(0)
+            //         .as_any()
+            //         .downcast_ref::<UInt64Array>()
+            //         .unwrap();
 
-                let types = batch
-                    .column(1)
-                    .as_any()
-                    .downcast_ref::<StringArray>()
-                    .unwrap();
+            //     let types = batch
+            //         .column(1)
+            //         .as_any()
+            //         .downcast_ref::<StringArray>()
+            //         .unwrap();
 
-                let names = batch
-                    .column(2)
-                    .as_any()
-                    .downcast_ref::<StringArray>()
-                    .unwrap();
+            //     let names = batch
+            //         .column(2)
+            //         .as_any()
+            //         .downcast_ref::<StringArray>()
+            //         .unwrap();
 
-                for (i, (ino, typ, name)) in izip!(inos, types, names).enumerate().skip(msg.offset)
-                {
-                    if let (Some(ino), Some(typ), Some(name)) = (ino, typ, name) {
-                        let typ = if typ == "DocumentType" {
-                            FileType::RegularFile
-                        } else {
-                            FileType::Directory
-                        };
+            //     for (i, (ino, typ, name)) in izip!(inos, types, names).enumerate().skip(msg.offset)
+            //     {
+            //         if let (Some(ino), Some(typ), Some(name)) = (ino, typ, name) {
+            //             let typ = if typ == "DocumentType" {
+            //                 FileType::RegularFile
+            //             } else {
+            //                 FileType::Directory
+            //             };
 
-                        dirs.push((ino, (i + 1) as i64, typ, name.to_owned()));
-                    }
-                }
-            }
+            //             dirs.push((ino, (i + 1) as i64, typ, name.to_owned()));
+            //         }
+            //     }
+            // }
 
             Ok(dirs)
         })
@@ -327,19 +314,17 @@ impl Handler<Read> for FsActor {
 
             let batches = table.send(Query::new(&query)).await.unwrap().unwrap();
 
-            let batches = batches.collect().await.unwrap();
+            // for batch in batches {
+            //     let content = batch
+            //         .column(0)
+            //         .as_any()
+            //         .downcast_ref::<BinaryArray>()
+            //         .unwrap();
 
-            for batch in batches {
-                let content = batch
-                    .column(0)
-                    .as_any()
-                    .downcast_ref::<BinaryArray>()
-                    .unwrap();
-
-                if content.len() > 0 {
-                    return Ok(Some(content.value(0).to_vec()));
-                }
-            }
+            //     if content.len() > 0 {
+            //         return Ok(Some(content.value(0).to_vec()));
+            //     }
+            // }
 
             Ok(None)
         })

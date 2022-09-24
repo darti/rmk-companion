@@ -3,20 +3,11 @@
     windows_subsystem = "windows"
 )]
 
-use std::thread;
-
-use actix::prelude::*;
-use actix::SyncArbiter;
 use anyhow::Context;
 use anyhow::Result;
 
 use log::info;
-use rmk_fs::FsActor;
 
-use rmk_fs::NotebookActor;
-use rmk_fs::Scan;
-use rmk_fs::TableActor;
-use rmk_fs::Umount;
 use tauri::{App, CustomMenuItem, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
 
 fn build_ui() -> Result<App> {
