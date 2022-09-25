@@ -1,9 +1,9 @@
-use arrow::{
+use async_trait::async_trait;
+use datafusion::arrow::{
     array::{ArrayBuilder, StringBuilder, UInt64Builder},
     datatypes::SchemaRef,
     record_batch::RecordBatch,
 };
-use async_trait::async_trait;
 use datafusion::{
     datasource::TableProvider,
     error::DataFusionError,
@@ -219,15 +219,17 @@ impl ExecutionPlan for FsExecPlan {
             .map(|p| p.clone())
             .unwrap_or_else(|| (0..self.table.schema().fields().len()).collect());
 
+        let size = nodes.len();
+
         let mut arrays: Vec<Box<dyn ArrayBuilder>> = projection
             .iter()
             .map(|i| match i {
-                0 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
-                1 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
-                2 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
-                3 => Box::new(StringBuilder::new(nodes.len())) as Box<dyn ArrayBuilder>,
-                4 => Box::new(UInt64Builder::new(nodes.len())) as Box<dyn ArrayBuilder>,
-                5 => Box::new(UInt64Builder::new(nodes.len())) as Box<dyn ArrayBuilder>,
+                0 => Box::new(StringBuilder::with_capacity(size, size)) as Box<dyn ArrayBuilder>,
+                1 => Box::new(StringBuilder::with_capacity(size, size)) as Box<dyn ArrayBuilder>,
+                2 => Box::new(StringBuilder::with_capacity(size, size)) as Box<dyn ArrayBuilder>,
+                3 => Box::new(StringBuilder::with_capacity(size, size)) as Box<dyn ArrayBuilder>,
+                4 => Box::new(UInt64Builder::with_capacity(nodes.len())) as Box<dyn ArrayBuilder>,
+                5 => Box::new(UInt64Builder::with_capacity(nodes.len())) as Box<dyn ArrayBuilder>,
                 _ => unreachable!(),
             })
             .collect();

@@ -1,4 +1,4 @@
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 
 use once_cell::sync::Lazy;
 

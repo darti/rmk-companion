@@ -2,8 +2,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use arrow::array::{BinaryArray, StringArray, UInt64Array};
-use arrow::record_batch::RecordBatch;
+use datafusion::arrow::array::{BinaryArray, StringArray, UInt64Array};
+use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::DataFusionError;
 use datafusion::datasource::{MemTable, TableProvider};
 

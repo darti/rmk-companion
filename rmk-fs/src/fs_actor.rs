@@ -4,10 +4,10 @@ use std::time::UNIX_EPOCH;
 
 use actix::prelude::*;
 use actix::Actor;
-use arrow::array::Array;
-use arrow::array::BinaryArray;
-use arrow::array::StringArray;
-use arrow::array::UInt64Array;
+use datafusion::arrow::array::Array;
+use datafusion::arrow::array::BinaryArray;
+use datafusion::arrow::array::StringArray;
+use datafusion::arrow::array::UInt64Array;
 use fuser::BackgroundSession;
 use fuser::FileAttr;
 use fuser::FileType;
