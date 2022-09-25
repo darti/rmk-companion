@@ -11,16 +11,16 @@ fn main() -> Result<()> {
 
     info!("Daemon started");
 
-    tokio::runtime::Builder::new_current_thread()
+    let status = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap()
         .block_on(async {
-            let status = shutdown_manager(async {
+            shutdown_manager(async {
                 daemon.stop();
             })
-            .await;
+            .await
         });
 
-    Ok(())
+    Ok(status)
 }
