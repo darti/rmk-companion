@@ -60,4 +60,10 @@ impl RmkDaemon {
 
         Ok(Self { system })
     }
+
+    pub fn stop(&self) {
+        info!("Shutting down daemon");
+
+        info!("Daemon shutdown complete");
+    }
 }
