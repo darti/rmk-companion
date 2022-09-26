@@ -22,7 +22,7 @@ fn main() -> Result<()> {
         daemon.mount().await?;
 
         shutdown_manager(async {
-            daemon.umount()?;
+            daemon.umount().await?;
             daemon.stop()
         })
         .await

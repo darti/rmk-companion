@@ -53,11 +53,11 @@ impl RmkDaemon {
         Ok(())
     }
 
-    pub fn umount(&self) -> RmkFsResult<()> {
+    pub async fn umount(&self) -> RmkFsResult<()> {
         info!("Unounting");
 
         if let Some(fs) = &self.fs {
-            // self.system.block_on(async { fs.send(Umount).await })??;
+            fs.send(Umount).await??;
         } else {
             return Err(RmkFsError::DaemonError("command actor not started".into()));
         };
