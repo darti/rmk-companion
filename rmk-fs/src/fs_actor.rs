@@ -152,7 +152,7 @@ impl Handler<Mount> for FsActor {
     type Result = RmkFsResult<()>;
 
     fn handle(&mut self, _msg: Mount, ctx: &mut Self::Context) -> Self::Result {
-        println!("Mounting filesystem...");
+        info!("Mounting filesystem...");
 
         let options = &[
             MountOption::AutoUnmount,

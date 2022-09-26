@@ -7,20 +7,26 @@ use anyhow::Result;
 fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let daemon = RmkDaemon::try_new()?;
+    let rt = actix::System::with_tokio_rt(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Actix runtime failed to initialize")
+    });
 
     info!("Daemon started");
 
-    let status = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            shutdown_manager(async {
-                daemon.stop();
-            })
-            .await
-        });
+    rt.block_on(async {
+        let daemon = RmkDaemon::try_new().await?;
 
-    Ok(status)
+        daemon.mount().await?;
+
+        shutdown_manager(async {
+            daemon.umount()?;
+            daemon.stop()
+        })
+        .await
+    })?;
+
+    Ok(())
 }

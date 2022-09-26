@@ -29,8 +29,11 @@ pub enum RmkFsError {
     #[error("unknown file type: {0}")]
     UnknownFileType(String),
 
-    #[error("failed to start daemon")]
-    DaemonError,
+    #[error("daemon failure: {0}")]
+    DaemonError(String),
+
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;
