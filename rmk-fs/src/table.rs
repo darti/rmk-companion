@@ -19,7 +19,6 @@ use std::{
     any::Any,
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::{Debug, Display},
-    fs,
     hash::Hash,
     path::PathBuf,
     sync::{Arc, RwLock},

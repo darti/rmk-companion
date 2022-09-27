@@ -1,10 +1,9 @@
-use actix::{Actor, Addr, SyncArbiter, System, SystemRunner};
+use actix::{Actor, Addr, SyncArbiter};
 use log::info;
 use rmk_fs::{
     errors::{RmkFsError, RmkFsResult},
     FsActor, Mount, NotebookActor, Scan, TableActor, Umount,
 };
-use tokio::runtime::Handle;
 
 use crate::settings::SETTINGS;
 

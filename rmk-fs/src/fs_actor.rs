@@ -58,7 +58,6 @@ impl FsActor {
             Err(err) => return Err(RmkFsError::ActorError(err)),
         };
 
-        batches.show().await.unwrap();
         let batches = batches.collect().await.unwrap();
 
         let mut attrs = Vec::new();

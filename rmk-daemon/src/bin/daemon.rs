@@ -4,8 +4,12 @@ use rmk_daemon::{shutdown::shutdown_manager, state::RmkDaemon};
 
 use anyhow::Result;
 
+use std::process::Command;
+
 fn main() -> Result<()> {
     pretty_env_logger::init();
+
+    Command::new("umount").arg("-f").arg("remarkable").status();
 
     let rt = actix::System::with_tokio_rt(|| {
         tokio::runtime::Builder::new_multi_thread()
