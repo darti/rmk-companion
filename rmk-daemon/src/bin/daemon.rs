@@ -1,5 +1,6 @@
 use log::info;
 
+use pretty_env_logger::env_logger::{Builder, Env};
 use rmk_daemon::{shutdown::shutdown_manager, state::RmkDaemon};
 
 use anyhow::Result;
@@ -7,7 +8,7 @@ use anyhow::Result;
 use std::process::Command;
 
 fn main() -> Result<()> {
-    pretty_env_logger::init();
+    Builder::from_env(Env::new().default_filter_or("info")).init();
 
     Command::new("umount").arg("-f").arg("remarkable").status();
 

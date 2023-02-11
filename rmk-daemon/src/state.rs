@@ -1,9 +1,6 @@
 use actix::{Actor, Addr, SyncArbiter};
 use log::info;
-use rmk_fs::{
-    errors::{RmkFsError, RmkFsResult},
-    FsActor, Mount, NotebookActor, Scan, TableActor, Umount,
-};
+use rmk_fs::errors::{RmkFsError, RmkFsResult};
 
 use crate::settings::SETTINGS;
 

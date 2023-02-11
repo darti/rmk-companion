@@ -2,8 +2,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
-use actix::prelude::*;
-use actix::Actor;
 use datafusion::arrow::array::Array;
 use datafusion::arrow::array::BinaryArray;
 use datafusion::arrow::array::StringArray;
@@ -23,8 +21,6 @@ use crate::errors::RmkFsError;
 use crate::errors::RmkFsResult;
 use crate::fs::Fs;
 
-use crate::Query;
-use crate::TableActor;
 use itertools::izip;
 
 pub const TTL: Duration = Duration::from_secs(1); // 1 second
@@ -32,21 +28,19 @@ pub const TTL: Duration = Duration::from_secs(1); // 1 second
 pub struct FsActor {
     mountpoint: PathBuf,
     session: Option<BackgroundSession>,
-    table: Addr<TableActor>,
 }
 
 impl FsActor {
-    pub fn new(mountpoint: &PathBuf, table_addr: Addr<TableActor>) -> Self {
+    pub fn new(mountpoint: &PathBuf) -> Self {
         Self {
             mountpoint: mountpoint.clone(),
             session: None,
-            table: table_addr,
         }
     }
 
     async fn search(table: Addr<TableActor>, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
         let query = format!(
-            "select distinct ino, type, size from metadata left join content on metadata.id = content.id where {}",
+             "select distinct ino, type, size from metadata left outer join content on metadata.id = content.id where {}",
             condition
         );
 
@@ -57,8 +51,6 @@ impl FsActor {
             Ok(Err(err)) => return Err(RmkFsError::DataFusionError(err)),
             Err(err) => return Err(RmkFsError::ActorError(err)),
         };
-
-        let batches = batches.collect().await.unwrap();
 
         let mut attrs = Vec::new();
 
