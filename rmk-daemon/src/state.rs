@@ -1,26 +1,19 @@
-use actix::{Actor, Addr, SyncArbiter};
 use log::info;
-use rmk_fs::errors::{RmkFsError, RmkFsResult};
+use rmk_fs::{
+    errors::{RmkFsError, RmkFsResult},
+    RmkFs,
+};
+use tokio::runtime::Handle;
 
 use crate::settings::SETTINGS;
 
 pub struct RmkDaemon {
-    fs: Option<Addr<FsActor>>,
+    fs: RmkFs,
 }
 
 impl RmkDaemon {
     pub async fn try_new() -> Result<Self, RmkFsError> {
-        let mut fs = None;
-
-        let notebook_renderer = SyncArbiter::start(4, || NotebookActor::new());
-
-        let file_watcher = TableActor::try_new(&SETTINGS.cache_root(), notebook_renderer)?.start();
-        file_watcher.send(Scan).await??;
-
-        fs = Some(FsActor::new(&SETTINGS.mount_point(), file_watcher.clone()).start());
-
-        Ok::<(), anyhow::Error>(())
-            .map_err(|_e| RmkFsError::DaemonError("failed to start".into()))?;
+        let fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
 
         Ok(Self { fs })
     }
@@ -33,30 +26,20 @@ impl RmkDaemon {
         Ok(())
     }
 
-    pub async fn mount(&self) -> RmkFsResult<()> {
+    pub fn mount(&mut self) -> RmkFsResult<()> {
         info!("Mounting");
 
-        if let Some(fs) = &self.fs {
-            let fs = fs.clone();
-
-            fs.send(Mount).await??;
-        } else {
-            return Err(RmkFsError::DaemonError("command actor not started".into()));
-        };
+        self.fs.mount(&SETTINGS.mount_point())?;
 
         info!("Mounted");
 
         Ok(())
     }
 
-    pub async fn umount(&self) -> RmkFsResult<()> {
+    pub async fn umount(&mut self) -> RmkFsResult<()> {
         info!("Unounting");
 
-        if let Some(fs) = &self.fs {
-            fs.send(Umount).await??;
-        } else {
-            return Err(RmkFsError::DaemonError("command actor not started".into()));
-        };
+        self.fs.umount()?;
 
         info!("Unmounted");
 

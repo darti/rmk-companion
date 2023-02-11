@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, time::Duration};
 
 use config::{Config, Environment, File};
 use directories::ProjectDirs;
@@ -15,6 +15,7 @@ pub struct Settings {
 pub struct Configuration {
     cache_root: PathBuf,
     mount_point: PathBuf,
+    ttl: u64,
 }
 
 impl Default for Configuration {
@@ -22,6 +23,7 @@ impl Default for Configuration {
         Self {
             cache_root: DIRS.data_dir().join("xochitl"),
             mount_point: DIRS.data_dir().join("mnt"),
+            ttl: 1,
         }
     }
 }
@@ -75,6 +77,10 @@ impl Settings {
 
     pub fn mount_point(&self) -> PathBuf {
         self.config.mount_point.clone()
+    }
+
+    pub fn ttl(&self) -> Duration {
+        Duration::from_secs(self.config.ttl)
     }
 }
 

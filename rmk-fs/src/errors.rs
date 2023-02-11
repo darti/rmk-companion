@@ -10,6 +10,9 @@ pub enum RmkFsError {
         source: std::io::Error,
     },
 
+    #[error("no mounted RmkFS")]
+    UmountError,
+
     #[error("failed to scan RmkFS at {root}")]
     ScanError { root: PathBuf },
 

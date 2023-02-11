@@ -4,28 +4,33 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use fuser::{FileAttr, FileType, Filesystem, ReplyData, Request};
+use fuser::{BackgroundSession, FileAttr, FileType, Filesystem, MountOption, ReplyData, Request};
 use indoc::formatdoc;
 use itertools::izip;
-use log::error;
-use tokio::runtime::Runtime;
+use log::{error, info};
+use tokio::runtime::Handle;
 
-use crate::{create_static, errors::RmkFsResult, RmkTable};
+use crate::{
+    create_static,
+    errors::{RmkFsError, RmkFsResult},
+    RmkTable,
+};
 
 use datafusion::{
     arrow::array::{StringArray, UInt64Array},
     prelude::*,
 };
 
-pub(crate) struct Fs {
+pub struct RmkFs {
     table_dyn: Arc<RmkTable>,
-    rt: Arc<Runtime>,
+    rt: Handle,
     context: SessionContext,
     ttl: Duration,
+    session: Option<BackgroundSession>,
 }
 
-impl Fs {
-    pub async fn new<P>(root: P, ttl: Duration, rt: Arc<Runtime>) -> RmkFsResult<Self>
+impl RmkFs {
+    pub async fn new<P>(root: P, ttl: Duration, rt: Handle) -> RmkFsResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -52,9 +57,59 @@ impl Fs {
             context,
             rt,
             ttl,
+            session: None,
         })
     }
 
+    pub fn mount(&mut self, mountpoint: &Path) -> RmkFsResult<()> {
+        info!("Mounting filesystem...");
+
+        let options = &[
+            MountOption::AutoUnmount,
+            MountOption::AllowOther,
+            MountOption::FSName("remarkable".to_string()),
+            MountOption::RO,
+            MountOption::CUSTOM("volname=Remarkable".to_string()),
+        ];
+
+        let fs = FsInner {
+            context: self.context.clone(),
+            rt: self.rt.clone(),
+            ttl: self.ttl,
+        };
+
+        self.session = Some(
+            fuser::spawn_mount2(fs, mountpoint.clone(), options).map_err(|source| {
+                RmkFsError::MountError {
+                    mountpoint: mountpoint.clone().to_string_lossy().to_string(),
+                    source,
+                }
+            })?,
+        );
+
+        Ok(())
+    }
+
+    pub fn umount(&mut self) -> RmkFsResult<()> {
+        info!("Unmounting filesystem...");
+
+        match self.session.take() {
+            Some(session) => {
+                session.join();
+                Ok(())
+            }
+            None => Err(RmkFsError::UmountError),
+        }
+    }
+}
+
+struct FsInner {
+    context: SessionContext,
+    rt: Handle,
+    ttl: Duration,
+}
+
+impl FsInner {
     pub fn query_attr(&self, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
         let query = formatdoc!(
             "SELECT 
@@ -151,7 +206,7 @@ impl Fs {
     }
 }
 
-impl Filesystem for Fs {
+impl Filesystem for FsInner {
     fn lookup(
         &mut self,
         _req: &fuser::Request<'_>,
