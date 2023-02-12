@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
 
     let mut daemon = RmkDaemon::try_new().await?;
 
-    daemon.mount()?;
+    daemon.mount().await?;
 
     shutdown_manager(async {
         daemon.umount().await?;

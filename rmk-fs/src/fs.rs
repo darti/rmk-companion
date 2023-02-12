@@ -1,4 +1,6 @@
 use std::{
+    ffi::OsString,
+    iter,
     path::Path,
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
@@ -7,8 +9,10 @@ use std::{
 use fuser::{BackgroundSession, FileAttr, FileType, Filesystem, MountOption, ReplyData, Request};
 use indoc::formatdoc;
 use itertools::izip;
-use log::{error, info};
+use log::{debug, error, info};
 use tokio::runtime::Handle;
+
+use datafusion::arrow::array::Array;
 
 use crate::{
     create_static,
@@ -17,9 +21,12 @@ use crate::{
 };
 
 use datafusion::{
-    arrow::array::{StringArray, UInt64Array},
+    arrow::array::{BinaryArray, StringArray, UInt64Array},
     prelude::*,
 };
+
+use rmk_notebook::COLLECTION_TYPE;
+use rmk_notebook::DOCUMENT_TYPE;
 
 pub struct RmkFs {
     table_dyn: Arc<RmkTable>,
@@ -110,17 +117,31 @@ struct FsInner {
 }
 
 impl FsInner {
-    pub fn query_attr(&self, condition: &str) -> RmkFsResult<Vec<FileAttr>> {
+    pub fn query_attr(
+        &self,
+        condition: &str,
+        with_size: bool,
+    ) -> RmkFsResult<Vec<(OsString, FileAttr)>> {
         let query = formatdoc!(
-            "SELECT 
-             distinct ino, 
-             type, 
-             size 
-             FROM metadata 
-             LEFT OUTER JOIN content ON metadata.id = content.id 
-             WHERE {}",
+            "
+            SELECT distinct
+                ino, 
+                type,
+                name, 
+                {} 
+            FROM metadata 
+            {}
+            WHERE {}",
+            if with_size { "size" } else { "0 AS size" },
+            if with_size {
+                "LEFT JOIN content_static ON metadata.ino = content_static.ino"
+            } else {
+                ""
+            },
             condition
         );
+
+        debug!("Query: {}", query);
 
         self.rt.block_on(async {
             let df = self.context.sql(&query).await?;
@@ -141,67 +162,85 @@ impl FsInner {
                     .downcast_ref::<StringArray>()
                     .unwrap();
 
-                let sizes = batch
+                let names = batch
                     .column(2)
                     .as_any()
-                    .downcast_ref::<UInt64Array>()
+                    .downcast_ref::<StringArray>()
                     .unwrap();
 
-                for (ino, typ, size) in izip!(inos, types, sizes) {
-                    if let (Some(ino), Some(typ), Some(size)) = (ino, typ, size) {
-                        match typ {
-                            DOCUMENT_TYPE => {
-                                let blksize = 512;
-                                let blocks = (size + blksize - 1) / blksize;
+                let sizes = batch.column(3).as_any();
 
-                                attrs.push(FileAttr {
-                                    ino,
-                                    size,
-                                    blocks,
-                                    atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                                    mtime: UNIX_EPOCH,
-                                    ctime: UNIX_EPOCH,
-                                    crtime: UNIX_EPOCH,
-                                    kind: FileType::RegularFile,
-                                    perm: 0o755,
-                                    nlink: 2,
-                                    uid: 501,
-                                    gid: 20,
-                                    rdev: 0,
-                                    flags: 0,
-                                    blksize: blksize as u32,
-                                });
-                            }
+                let sizes = sizes.downcast_ref::<UInt64Array>();
+                let sizes = sizes.unwrap();
 
-                            COLLECTION_TYPE => {
-                                attrs.push(FileAttr {
-                                    ino,
-                                    size: 0,
-                                    blocks: 0,
-                                    atime: UNIX_EPOCH, // 1970-01-01 00:00:00
-                                    mtime: UNIX_EPOCH,
-                                    ctime: UNIX_EPOCH,
-                                    crtime: UNIX_EPOCH,
-                                    kind: FileType::Directory,
-                                    perm: 0o755,
-                                    nlink: 2,
-                                    uid: 501,
-                                    gid: 20,
-                                    rdev: 0,
-                                    flags: 0,
-                                    blksize: 512,
-                                });
-                            }
-
-                            t => {
-                                error!("Unknown type: {}", t);
-                            }
+                for (ino, typ, name, size) in izip!(inos, types, names, sizes) {
+                    if let (Some(ino), Some(typ), Some(name), Some(size)) = (ino, typ, name, size) {
+                        let kind = match typ {
+                            DOCUMENT_TYPE => FileType::RegularFile,
+                            COLLECTION_TYPE => FileType::Directory,
+                            _ => continue,
                         };
+
+                        let blksize = 512;
+                        let blocks = (size + blksize - 1) / blksize;
+
+                        attrs.push((
+                            name.into(),
+                            FileAttr {
+                                ino,
+                                size,
+                                blocks,
+                                atime: UNIX_EPOCH, // 1970-01-01 00:00:00
+                                mtime: UNIX_EPOCH,
+                                ctime: UNIX_EPOCH,
+                                crtime: UNIX_EPOCH,
+                                kind,
+                                perm: 0o755,
+                                nlink: 2,
+                                uid: 501,
+                                gid: 20,
+                                rdev: 0,
+                                flags: 0,
+                                blksize: blksize as u32,
+                            },
+                        ));
                     }
                 }
             }
 
             Ok(attrs)
+        })
+    }
+
+    fn read_content(&self, ino: u64) -> RmkFsResult<Option<Vec<u8>>> {
+        let query = formatdoc!(
+            "
+            SELECT 
+                content.content 
+            FROM metadata 
+            JOIN content ON metadata.id = content.id 
+            WHERE metadata.ino = {}
+            LIMIT 1",
+            ino
+        );
+
+        self.rt.block_on(async {
+            let df = self.context.sql(&query).await?;
+            let batches = df.collect().await?;
+
+            for batch in batches {
+                let content = batch
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<BinaryArray>()
+                    .unwrap();
+
+                if content.len() > 0 {
+                    return Ok(Some(content.value(0).to_vec()));
+                }
+            }
+
+            Ok(None)
         })
     }
 }
@@ -221,11 +260,12 @@ impl Filesystem for FsInner {
                 name.to_string_lossy()
             )
             .as_str(),
+            true,
         );
 
         match nodes {
             Ok(attrs) => {
-                if let Some(attr) = attrs.first() {
+                if let Some((_, attr)) = attrs.first() {
                     reply.entry(&self.ttl, attr, 0)
                 } else {
                     error!("node not found: {} ->  {}", parent, name.to_string_lossy());
@@ -241,24 +281,23 @@ impl Filesystem for FsInner {
     }
 
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
-        // let table = self.table.clone();
+        let nodes = self.query_attr(format!("ino = {}  LIMIT 1", ino).as_str(), false);
 
-        // let sys = System::new();
+        match nodes {
+            Ok(attrs) => {
+                if let Some((_, attr)) = attrs.first() {
+                    reply.attr(&self.ttl, attr)
+                } else {
+                    error!("node not found: {}", ino);
+                    reply.error(libc::ENOENT)
+                }
+            }
 
-        // let r = sys.block_on(async move { table.send(GetAttr { ino }).await });
-
-        // match r {
-        //     Ok(Ok(Some(attr))) => reply.attr(&TTL, &attr),
-        //     Ok(Ok(None)) => reply.error(libc::ENOENT),
-        //     Ok(Err(err)) => {
-        //         error!("{:?}", err);
-        //         reply.error(libc::ENOENT)
-        //     }
-        //     Err(err) => {
-        //         error!("{:?}", err);
-        //         reply.error(libc::ENOENT)
-        //     }
-        // }
+            Err(err) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT)
+            }
+        }
     }
 
     fn readdir(
@@ -269,26 +308,26 @@ impl Filesystem for FsInner {
         offset: i64,
         mut reply: fuser::ReplyDirectory,
     ) {
-        // let table = self.table.clone();
+        let nodes = self.query_attr(
+            format!("parent_ino = {}  OFFSET {} SORT BY ino", ino, offset).as_str(),
+            false,
+        );
 
-        // let sys = System::new();
+        match nodes {
+            Ok(attrs) => {
+                for (i, (name, attr)) in attrs.iter().enumerate() {
+                    if reply.add(attr.ino, (i + 1) as i64, attr.kind, name) {
+                        break;
+                    }
+                }
+            }
 
-        // let r = sys.block_on(async {
-        //     table
-        //         .send(ReadDir {
-        //             offset: offset as usize,
-        //             ino,
-        //         })
-        //         .await
-        //         .unwrap()
-        //         .unwrap()
-        // });
-
-        // for (ino, i, typ, name) in r {
-        //     if reply.add(ino, i, typ, name) {
-        //         break;
-        //     }
-        // }
+            Err(err) => {
+                error!("{:?}", err);
+                reply.error(libc::ENOENT);
+                return;
+            }
+        }
 
         reply.ok();
     }
@@ -304,6 +343,7 @@ impl Filesystem for FsInner {
         _lock: Option<u64>,
         reply: ReplyData,
     ) {
+
         // let table = self.table.clone();
 
         // let sys = System::new();
