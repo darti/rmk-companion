@@ -4,6 +4,7 @@ use pretty_env_logger::env_logger::{Builder, Env};
 use rmk_daemon::{shutdown::shutdown_manager, state::RmkDaemon};
 
 use anyhow::Result;
+use tokio::sync::mpsc;
 
 use std::process::Command;
 
@@ -17,9 +18,11 @@ async fn main() -> Result<()> {
 
     let mut daemon = RmkDaemon::try_new().await?;
 
+    let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
+
     daemon.mount().await?;
 
-    shutdown_manager(async {
+    shutdown_manager(shutdown_recv, async {
         daemon.umount().await?;
         daemon.stop()
     })
