@@ -19,6 +19,7 @@ signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 lazy_static = "1"
 directories = "4"
 toml = "0.7"
+datafusion = "18"
 
 tokio = { version = "1", features = [
     "rt-multi-thread",

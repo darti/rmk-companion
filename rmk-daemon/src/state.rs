@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use datafusion::prelude::DataFrame;
 use log::info;
 use rmk_fs::{
     errors::{RmkFsError, RmkFsResult},
@@ -53,5 +54,12 @@ impl RmkDaemon {
         info!("Unmounted");
 
         Ok(())
+    }
+
+    pub async fn query<S>(&self, query: S) -> RmkFsResult<DataFrame>
+    where
+        S: AsRef<str>,
+    {
+        self.fs.read().await.query(query.as_ref()).await
     }
 }

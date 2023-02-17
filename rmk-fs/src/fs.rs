@@ -1,6 +1,5 @@
 use std::{
     ffi::OsString,
-    iter,
     path::Path,
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
@@ -107,6 +106,10 @@ impl RmkFs {
             }
             None => Err(RmkFsError::UmountError),
         }
+    }
+
+    pub async fn query(&self, query: &str) -> RmkFsResult<DataFrame> {
+        self.context.sql(query).await.map_err(|e| e.into())
     }
 }
 
