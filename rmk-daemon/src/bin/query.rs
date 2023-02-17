@@ -1,34 +1,28 @@
-use std::{
-    io::{self, Stdout, Write},
-    sync::Arc,
-    thread,
-    time::Duration,
-};
+use std::io::{self};
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
+    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use futures::{FutureExt, StreamExt};
 use log::{error, info};
-use pretty_env_logger::env_logger::{Builder, Env};
+
 use rmk_daemon::{shutdown::shutdown_manager, state::RmkDaemon};
 use tokio::{
     runtime::Handle,
-    sync::{
-        mpsc::{self, Sender, UnboundedSender},
-        RwLock,
-    },
+    sync::mpsc::{self, Sender, UnboundedSender},
 };
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Row, Table, TableState},
     Frame, Terminal,
 };
-use tui_logger::{TuiLoggerLevelOutput, TuiLoggerSmartWidget, TuiLoggerWidget};
+use tui_logger::TuiLoggerWidget;
+
+use tui_textarea::{Input, TextArea};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,7 +36,9 @@ async fn main() -> anyhow::Result<()> {
     let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
     let (send, mut recv) = mpsc::channel(1);
 
-    handle.spawn(run_app(shutdown_send, send.clone()));
+    let app = App::default();
+
+    handle.spawn(run_app(shutdown_send, send.clone(), app));
 
     drop(send);
 
@@ -62,7 +58,17 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_app(shutdown_send: UnboundedSender<()>, _sender: Sender<()>) -> anyhow::Result<()> {
+#[derive(Default)]
+struct App<'a> {
+    query: TextArea<'a>,
+    table_state: TableState,
+}
+
+async fn run_app<'a>(
+    shutdown_send: UnboundedSender<()>,
+    _sender: Sender<()>,
+    mut app: App<'a>,
+) -> anyhow::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -72,18 +78,19 @@ async fn run_app(shutdown_send: UnboundedSender<()>, _sender: Sender<()>) -> any
     let mut reader = EventStream::new();
 
     loop {
-        terminal.draw(|f| ui(f))?;
-        let mut event = reader.next().fuse();
+        terminal.draw(|f| ui(f, &mut app))?;
+        let event = reader.next().fuse();
 
         tokio::select! {
 
             maybe_event = event => match maybe_event {
-                Some(Ok(Event::Key(key))) => match key.code {
-                    KeyCode::Char('q') => {
-                        shutdown_send.send(())?;
-                        break;
-                    }
-                    _ => info!("Key: {:?}", key)
+                Some(Ok(Event::Key(key))) if key.code == KeyCode::Esc => {
+                    break;
+
+                },
+                Some(Ok(Event::Key(key)))=> {
+                    app.query.input(key);
+
                 },
                 Some(Err(err)) => error!("Error reading event: {}", err),
                 None => break,
@@ -107,22 +114,37 @@ async fn run_app(shutdown_send: UnboundedSender<()>, _sender: Sender<()>) -> any
     Ok(())
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>) {
-    let size = f.size();
-    let block = Block::default().title("Block").borders(Borders::ALL);
-    let inner_area = block.inner(size);
-    f.render_widget(block, size);
-
-    let mut constraints = vec![
-        Constraint::Length(3),
-        Constraint::Percentage(50),
-        Constraint::Min(3),
-    ];
-
+fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(inner_area);
+        .constraints([Constraint::Percentage(70), Constraint::Min(3)])
+        .split(f.size());
+
+    {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .split(chunks[0]);
+
+        app.query.set_block(
+            Block::default()
+                .style(Style::default().fg(Color::White).bg(Color::Black))
+                .borders(Borders::ALL)
+                .title("Result"),
+        );
+
+        f.render_widget(app.query.widget(), chunks[0]);
+
+        let table = Table::new([
+            Row::new(vec!["Cell1", "Cell2", "Cell3"]),
+            Row::new(vec!["Cell4", "Cell5", "Cell6"]),
+        ])
+        .header(Row::new(vec!["Header1", "Header2", "Header3"]))
+        .style(Style::default().fg(Color::White).bg(Color::Black))
+        .block(Block::default().borders(Borders::ALL).title("Result"));
+
+        f.render_stateful_widget(table, chunks[1], &mut app.table_state);
+    }
 
     let tui_w: TuiLoggerWidget = TuiLoggerWidget::default()
         .block(
@@ -138,10 +160,7 @@ fn ui<B: Backend>(f: &mut Frame<B>) {
         .style_info(Style::default().fg(Color::Cyan))
         .output_separator('|')
         .output_timestamp(Some("%F %H:%M:%S%.3f".to_string()))
-        .output_level(Some(TuiLoggerLevelOutput::Long))
-        .output_target(false)
-        .output_file(false)
-        .output_line(false)
         .style(Style::default().fg(Color::White).bg(Color::Black));
-    f.render_widget(tui_w, chunks[2]);
+
+    f.render_widget(tui_w, chunks[1]);
 }
