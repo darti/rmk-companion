@@ -56,6 +56,16 @@ impl RmkDaemon {
         Ok(())
     }
 
+    pub async fn scan(&mut self) -> RmkFsResult<()> {
+        info!("Scanning");
+
+        self.fs.clone().write().await.scan()?;
+
+        info!("Scanned");
+
+        Ok(())
+    }
+
     pub async fn query<S>(&self, query: S) -> RmkFsResult<DataFrame>
     where
         S: AsRef<str>,

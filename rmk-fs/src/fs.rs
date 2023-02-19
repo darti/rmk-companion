@@ -115,6 +115,10 @@ impl RmkFs {
     pub async fn query(&self, query: &str) -> RmkFsResult<DataFrame> {
         self.context.sql(query).await.map_err(|e| e.into())
     }
+
+    pub fn scan(&self) -> RmkFsResult<()> {
+        self.table_dyn.scan()
+    }
 }
 
 struct FsInner {

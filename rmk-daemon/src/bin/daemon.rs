@@ -21,6 +21,7 @@ async fn main() -> Result<()> {
     let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
 
     daemon.mount().await?;
+    daemon.scan().await?;
 
     shutdown_manager(shutdown_recv, async {
         daemon.umount().await?;
