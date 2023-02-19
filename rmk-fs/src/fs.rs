@@ -141,7 +141,7 @@ impl FsInner {
                 "CAST(0 AS BIGINT UNSIGNED) AS size"
             },
             if with_size {
-                "LEFT JOIN content_static ON metadata.ino = content_static.ino"
+                "LEFT OUTER JOIN content_static ON metadata.ino = content_static.ino"
             } else {
                 ""
             },
@@ -282,7 +282,7 @@ impl Filesystem for FsInner {
             }
 
             Err(err) => {
-                error!("{:?}", err);
+                error!("lookup: {:?}", err);
                 reply.error(libc::ENOENT)
             }
         }
@@ -302,7 +302,7 @@ impl Filesystem for FsInner {
             }
 
             Err(err) => {
-                error!("{:?}", err);
+                error!("getattr: {:?}", err);
                 reply.error(libc::ENOENT)
             }
         }
@@ -331,7 +331,7 @@ impl Filesystem for FsInner {
             }
 
             Err(err) => {
-                error!("{:?}", err);
+                error!("readdir: {:?}", err);
                 reply.error(libc::ENOENT);
                 return;
             }
