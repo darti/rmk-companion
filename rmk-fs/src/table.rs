@@ -24,9 +24,8 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
-use tokio::sync::RwLock;
 
 use log::{debug, info};
 use rmk_notebook::{read_metadata, Metadata, DOCUMENT_TYPE};
@@ -92,7 +91,7 @@ pub struct RmkTable {
 
 impl Display for RmkTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.inner.blocking_read())
+        write!(f, "{:?}", self.inner.read())
     }
 }
 
@@ -107,7 +106,10 @@ impl RmkTable {
     }
 
     pub fn scan(&self) -> RmkFsResult<()> {
-        self.inner.blocking_write().scan()
+        self.inner
+            .write()
+            .map_err(|e| RmkFsError::ConcurrencyError)?
+            .scan()
     }
 
     pub fn schema(&self) -> SchemaRef {
@@ -169,7 +171,6 @@ impl FsExecPlan {
     }
 }
 
-#[async_trait]
 impl ExecutionPlan for FsExecPlan {
     fn as_any(&self) -> &dyn Any {
         self
@@ -206,7 +207,10 @@ impl ExecutionPlan for FsExecPlan {
         _context: Arc<TaskContext>,
     ) -> Result<SendableRecordBatchStream, DataFusionError> {
         let nodes = {
-            let table = self.table.inner.blocking_read();
+            let table =
+                self.table.inner.read().map_err(|e| {
+                    DataFusionError::External(Box::new(RmkFsError::ConcurrencyError))
+                })?;
             table.data.clone()
         };
 

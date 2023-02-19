@@ -35,6 +35,9 @@ pub enum RmkFsError {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+
+    #[error("enable to acquire lock")]
+    ConcurrencyError,
 }
 
 pub type RmkFsResult<T> = Result<T, RmkFsError>;
