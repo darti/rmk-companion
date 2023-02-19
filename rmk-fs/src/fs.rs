@@ -11,7 +11,7 @@ use itertools::izip;
 use log::{debug, error, info};
 use tokio::runtime::Handle;
 
-use datafusion::arrow::array::Array;
+use datafusion::arrow::array::{Array, Int64Array};
 
 use crate::{
     create_static,
@@ -135,7 +135,11 @@ impl FsInner {
             FROM metadata 
             {}
             WHERE {}",
-            if with_size { "size" } else { "0 AS size" },
+            if with_size {
+                "size"
+            } else {
+                "CAST(0 AS BIGINT UNSIGNED) AS size"
+            },
             if with_size {
                 "LEFT JOIN content_static ON metadata.ino = content_static.ino"
             } else {
@@ -171,10 +175,11 @@ impl FsInner {
                     .downcast_ref::<StringArray>()
                     .unwrap();
 
-                let sizes = batch.column(3).as_any();
-
-                let sizes = sizes.downcast_ref::<UInt64Array>();
-                let sizes = sizes.unwrap();
+                let sizes = batch
+                    .column(3)
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
 
                 for (ino, typ, name, size) in izip!(inos, types, names, sizes) {
                     if let (Some(ino), Some(typ), Some(name), Some(size)) = (ino, typ, name, size) {
@@ -312,7 +317,7 @@ impl Filesystem for FsInner {
         mut reply: fuser::ReplyDirectory,
     ) {
         let nodes = self.query_attr(
-            format!("parent_ino = {}  OFFSET {} SORT BY ino", ino, offset).as_str(),
+            format!("parent_ino = {}  SORT BY ino OFFSET {} ", ino, offset).as_str(),
             false,
         );
 
