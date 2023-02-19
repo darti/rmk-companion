@@ -141,7 +141,7 @@ impl FsInner {
                 "CAST(0 AS BIGINT UNSIGNED) AS size"
             },
             if with_size {
-                "LEFT OUTER JOIN content_static ON metadata.ino = content_static.ino"
+                "LEFT OUTER JOIN content_static ON metadata.id = content_static.id"
             } else {
                 ""
             },
