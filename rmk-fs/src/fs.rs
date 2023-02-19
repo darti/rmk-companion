@@ -11,7 +11,10 @@ use itertools::izip;
 use log::{debug, error, info};
 use tokio::runtime::Handle;
 
-use datafusion::arrow::array::{Array, Int64Array};
+use datafusion::{
+    arrow::array::{Array, Int64Array},
+    parquet::data_type::AsBytes,
+};
 
 use crate::{
     create_static,
@@ -56,7 +59,8 @@ impl RmkFs {
 
         context.register_table("metadata", metadata.into_view())?;
 
-        context.register_table("content_static", content_static)?;
+        // TODO: add content_dynamic
+        context.register_table("content", content_static)?;
 
         Ok(Self {
             table_dyn,
@@ -141,7 +145,7 @@ impl FsInner {
                 "CAST(0 AS BIGINT UNSIGNED) AS size"
             },
             if with_size {
-                "LEFT OUTER JOIN content_static ON metadata.id = content_static.id"
+                "LEFT OUTER JOIN content ON metadata.id = content.id"
             } else {
                 ""
             },
@@ -289,7 +293,7 @@ impl Filesystem for FsInner {
     }
 
     fn getattr(&mut self, _req: &fuser::Request<'_>, ino: u64, reply: fuser::ReplyAttr) {
-        let nodes = self.query_attr(format!("ino = {}  LIMIT 1", ino).as_str(), false);
+        let nodes = self.query_attr(format!("ino = {}  LIMIT 1", ino).as_str(), true);
 
         match nodes {
             Ok(attrs) => {
@@ -351,27 +355,14 @@ impl Filesystem for FsInner {
         _lock: Option<u64>,
         reply: ReplyData,
     ) {
+        match self.read_content(ino) {
+            Ok(Some(content)) => {
+                let from = offset as usize;
+                let to = from + size as usize;
 
-        // let table = self.table.clone();
-
-        // let sys = System::new();
-
-        // let r = sys.block_on(async {
-        //     table
-        //         .send(Read { ino, offset, size })
-        //         .await
-        //         .unwrap()
-        //         .unwrap()
-        // });
-
-        // match r {
-        //     Some(content) => {
-        //         let from = offset as usize;
-        //         let to = from + size as usize;
-
-        //         reply.data(&content[from..to].as_bytes())
-        //     }
-        //     None => reply.error(libc::ENOENT),
-        // };
+                reply.data(&content[from..to].as_bytes())
+            }
+            _ => reply.error(libc::ENOENT),
+        };
     }
 }
