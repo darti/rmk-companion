@@ -1,7 +1,7 @@
 use std::{
     ffi::OsString,
     path::Path,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -11,10 +11,7 @@ use itertools::izip;
 use log::{debug, error, info};
 use tokio::runtime::Handle;
 
-use datafusion::{
-    arrow::array::{Array, Int64Array},
-    parquet::data_type::AsBytes,
-};
+use datafusion::{arrow::array::Array, parquet::data_type::AsBytes};
 
 use crate::{
     create_static,
@@ -30,12 +27,13 @@ use datafusion::{
 use rmk_notebook::COLLECTION_TYPE;
 use rmk_notebook::DOCUMENT_TYPE;
 
+#[derive(Clone)]
 pub struct RmkFs {
     table_dyn: Arc<RmkTable>,
     rt: Handle,
     context: SessionContext,
     ttl: Duration,
-    session: Option<BackgroundSession>,
+    session: Option<Arc<Mutex<BackgroundSession>>>,
 }
 
 impl RmkFs {
@@ -88,26 +86,39 @@ impl RmkFs {
             ttl: self.ttl,
         };
 
-        self.session = Some(
+        self.session = Some(Arc::new(Mutex::new(
             fuser::spawn_mount2(fs, mountpoint.clone(), options).map_err(|source| {
                 RmkFsError::MountError {
                     mountpoint: mountpoint.clone().to_string_lossy().to_string(),
                     source,
                 }
             })?,
-        );
+        )));
 
         Ok(())
     }
 
     pub fn umount(&mut self) -> RmkFsResult<()> {
+        if !self.is_mounted() {
+            info!("Filesystem is not mounted, doing nothing...");
+
+            return Ok(());
+        }
+
         info!("Unmounting filesystem...");
 
-        match self.session.take() {
-            Some(session) => {
+        let session = self.session.take().map(|s| {
+            Arc::try_unwrap(s)
+                .map_err(|_| RmkFsError::UmountError)
+                .and_then(|s| s.into_inner().map_err(|_| RmkFsError::UmountError))
+        });
+
+        match session {
+            Some(Ok(session)) => {
                 session.join();
                 Ok(())
             }
+            Some(Err(e)) => Err(RmkFsError::UmountError),
             None => Err(RmkFsError::UmountError),
         }
     }
@@ -118,6 +129,10 @@ impl RmkFs {
 
     pub fn scan(&self) -> RmkFsResult<()> {
         self.table_dyn.scan()
+    }
+
+    pub fn is_mounted(&self) -> bool {
+        self.session.is_some()
     }
 }
 

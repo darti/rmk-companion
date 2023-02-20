@@ -1,11 +1,10 @@
-use std::sync::Arc;
-
 use log::info;
 use rmk_daemon::{
+    settings::SETTINGS,
     shutdown::shutdown_manager,
-    state::RmkDaemon,
     ui::tui::{run_app, App},
 };
+use rmk_fs::RmkFs;
 use tokio::{runtime::Handle, sync::mpsc};
 
 #[tokio::main]
@@ -13,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     // Builder::from_env(Env::new().default_filter_or("info")).init();
     tui_logger::init_logger(log::LevelFilter::Info)?;
 
-    let daemon = RmkDaemon::try_new().await?;
+    let mut fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
 
     let handle = Handle::current();
 
@@ -30,14 +29,12 @@ async fn main() -> anyhow::Result<()> {
 
     handle
         .spawn(shutdown_manager(shutdown_recv, async move {
-            let daemon = daemon.clone();
+            let fs = fs.clone();
 
             info!("Waiting for shutdown to complete...");
-            let _ = recv.recv().await;
-
-            daemon.stop()
+            recv.recv().await
         }))
-        .await??;
+        .await?;
 
     info!("Exiting...");
 

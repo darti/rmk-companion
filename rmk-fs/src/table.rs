@@ -108,7 +108,7 @@ impl RmkTable {
     pub fn scan(&self) -> RmkFsResult<()> {
         self.inner
             .write()
-            .map_err(|e| RmkFsError::ConcurrencyError)?
+            .map_err(|_e| RmkFsError::ConcurrencyError)?
             .scan()
     }
 
