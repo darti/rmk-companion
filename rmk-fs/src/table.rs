@@ -37,7 +37,7 @@ use crate::{
 };
 
 struct RmkTableInner {
-    data: HashMap<String, Metadata>,
+    data: Vec<(String, Metadata)>,
     root: PathBuf,
 }
 
@@ -47,7 +47,7 @@ impl RmkTableInner {
         P: AsRef<Path>,
     {
         Ok(RmkTableInner {
-            data: HashMap::new(),
+            data: vec![],
             root: std::fs::canonicalize(root)?,
         })
     }
@@ -67,12 +67,16 @@ impl RmkTableInner {
             })?
             .flatten();
 
+        let mut data = Vec::with_capacity(1000);
+
         for f in files {
             debug!("{:?}", f);
 
             let (id, metadata) = read_metadata(&f)?;
-            self.data.insert(id.to_string(), metadata);
+            data.push((id.to_string(), metadata));
         }
+
+        self.data = data;
 
         Ok(())
     }

@@ -32,6 +32,8 @@ async fn main() -> Result<()> {
 
     let mut fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
 
+    fs.scan()?;
+
     match cli.command {
         Commands::Query { sql } => {
             let df = fs.query(&sql).await?;
