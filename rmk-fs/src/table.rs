@@ -20,7 +20,7 @@ use datafusion::{
 use glob::glob;
 use std::{
     any::Any,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::hash_map::DefaultHasher,
     fmt::{Debug, Display},
     hash::Hash,
     path::{Path, PathBuf},
