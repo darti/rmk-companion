@@ -58,44 +58,14 @@ impl<'a> RmkNode<'a> {
     }
 }
 
-pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>), DataFusionError>
-{
-    let static_files = [
-        RmkNode::new(".", "CollectionType", ".", None, None),
-        RmkNode::new(".", "CollectionType", "..", None, None),
-        RmkNode::new(
-            ".VolumeIcon.icns",
-            "DocumentType",
-            ".VolumeIcon.icns",
-            None,
-            Some(include_bytes!("../resources/.VolumeIcon.icns")),
-        ),
-        RmkNode::new(
-            "._.VolumeIcon.icns",
-            "DocumentType",
-            "._.VolumeIcon.icns",
-            None,
-            Some(include_bytes!("../resources/._.VolumeIcon.icns")),
-        ),
-        RmkNode::new(
-            "._.",
-            "DocumentType",
-            "._.",
-            None,
-            Some(include_bytes!("../resources/._.")),
-        ),
-        RmkNode::new(
-            "._.com.apple.timemachine.donotpresent",
-            "DocumentType",
-            "._.com.apple.timemachine.donotpresent",
-            None,
-            Some(include_bytes!(
-                "../resources/._.com.apple.timemachine.donotpresent"
-            )),
-        ),
-    ];
+pub fn create_static<'a>(
+    nodes: impl IntoIterator<Item = &'a RmkNode<'a>> + Iterator,
+) -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>), DataFusionError> {
+    let n = {
+        let (l, u) = nodes.size_hint();
 
-    let n = static_files.len();
+        u.unwrap_or(l)
+    };
 
     let mut metadata = (
         Vec::with_capacity(n),
@@ -111,7 +81,7 @@ pub fn create_static() -> Result<(Arc<dyn TableProvider>, Arc<dyn TableProvider>
         Vec::with_capacity(n),
     );
 
-    for node in static_files.iter() {
+    for node in nodes {
         metadata.0.push(node.id);
         metadata.1.push(node.typ);
         metadata.2.push(node.name);

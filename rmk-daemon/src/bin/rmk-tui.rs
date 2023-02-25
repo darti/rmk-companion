@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     // Builder::from_env(Env::new().default_filter_or("info")).init();
     tui_logger::init_logger(log::LevelFilter::Info)?;
 
-    let mut fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
+    let mut fs = RmkFs::default();
 
     let handle = Handle::current();
 
@@ -29,8 +29,6 @@ async fn main() -> anyhow::Result<()> {
 
     handle
         .spawn(shutdown_manager(shutdown_recv, async move {
-            let fs = fs.clone();
-
             info!("Waiting for shutdown to complete...");
             recv.recv().await
         }))

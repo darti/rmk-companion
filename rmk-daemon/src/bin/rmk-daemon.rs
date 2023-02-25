@@ -1,12 +1,14 @@
 use std::process::Command;
+use std::sync::Arc;
 
+use datafusion::prelude::SessionContext;
 use log::info;
 
 use pretty_env_logger::env_logger::{Builder, Env};
 use rmk_daemon::{settings::SETTINGS, shutdown::shutdown_manager};
 
 use anyhow::Result;
-use rmk_fs::RmkFs;
+use rmk_fs::{init_tables, RmkFs};
 
 use tokio;
 use tokio::runtime::Handle;
@@ -18,18 +20,22 @@ async fn main() -> Result<()> {
 
     Command::new("umount").arg("-f").arg("remarkable").status();
 
-    let mut fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
+    let ctx = SessionContext::default();
+
+    let backend = init_tables(ctx.clone(), SETTINGS.cache_root()).await?;
+
+    ctx.sql("SELECT * FROM metadata").await?.show().await?;
+
+    let mut fs = Arc::new(RmkFs::default());
 
     let (shutdown_send, shutdown_recv) = mpsc::unbounded_channel();
 
-    {
-        let fs = fs.clone();
-        // Handle::current().spawn(async move { fs.clone().scan() });
-
-        fs.scan()?;
-    }
-
-    fs.mount(&SETTINGS.mount_point())?;
+    fs.mount(
+        Handle::current(),
+        ctx,
+        SETTINGS.ttl(),
+        &SETTINGS.mount_point(),
+    )?;
 
     info!("RmkFs started");
 

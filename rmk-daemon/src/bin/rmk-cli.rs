@@ -4,8 +4,10 @@ use rmk_daemon::settings::SETTINGS;
 use anyhow::Result;
 
 use clap::{Parser, Subcommand};
-use rmk_fs::RmkFs;
+
 use tokio::runtime::Handle;
+
+use rmk_fs::RmkFs;
 
 /// Utility to interact with your Remarkable tablet
 #[derive(Parser)]
@@ -30,14 +32,12 @@ async fn main() -> Result<()> {
     Builder::from_env(Env::new().default_filter_or("info")).init();
     let cli = Cli::parse();
 
-    let mut fs = RmkFs::new(&SETTINGS.cache_root(), SETTINGS.ttl(), Handle::current()).await?;
-
-    fs.scan()?;
+    let mut fs = RmkFs::default();
 
     match cli.command {
         Commands::Query { sql } => {
-            let df = fs.query(&sql).await?;
-            df.show().await?;
+            // let df = fs.query(&sql).await?;
+            // df.show().await?;
         }
     }
 

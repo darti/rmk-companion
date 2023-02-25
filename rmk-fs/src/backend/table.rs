@@ -6,7 +6,7 @@ use datafusion::{
         record_batch::RecordBatch,
     },
     physical_plan::Statistics,
-    prelude::Expr,
+    prelude::{Expr, SessionContext},
 };
 use datafusion::{
     datasource::TableProvider,
@@ -35,6 +35,8 @@ use crate::{
     errors::{RmkFsError, RmkFsResult},
     SCHEMAS,
 };
+
+use super::table_static::create_static;
 
 struct RmkTableInner {
     data: Vec<(String, Metadata)>,
